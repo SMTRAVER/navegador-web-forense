@@ -1,59 +1,75 @@
-# Navegador Web Forense — Traverso Forensics
+# Navegador Web Forense
 
-Navegador para adquirir prueba digital de sitios web y redes sociales con cadena
-de custodia: cada pieza se guarda con su hash, su acta y su sello de tiempo, y
-al cerrar la sesión el programa emite un dictamen y arma el paquete.
+Navegador para adquirir prueba de sitios web y redes sociales dejando cadena de custodia.
+Cada archivo sale con su hash, su acta y su sello de tiempo. Al cerrar la sesión el
+programa emite el dictamen y arma el paquete.
 
-Está hecho para una pericia: lo que se adquiere tiene que poder verificarlo un
-tercero —la contraparte, un perito de control, el juzgado— sin este programa y
-sin creerle nada al perito.
+Lo que se adquiere tiene que poder comprobarlo otro sin este programa y sin creerle nada
+al perito: la contraparte, el juzgado, quien sea.
 
-- **Autor:** Miguel Angel Alfredo Traverso — Traverso Forensics
-- **Plataforma:** Windows, Python 3.11, PyQt6 + Qt WebEngine
-- **Norma de referencia:** ISO/IEC 27037:2012
-
----
+Windows, Python 3.11, PyQt6 con Qt WebEngine. Referencia: ISO/IEC 27037:2012.
+Autor: Miguel Angel Alfredo Traverso, Traverso Forensics.
 
 ## Qué adquiere
 
-- Capturas de pantalla y de página completa, con recorrido automático de
-  comentarios, de listas de contactos y de conversaciones de WhatsApp Web.
-- Video de la sesión (FFmpeg), tráfico de red en HAR 1.2 y archivo WARC
-  (ISO 28500).
-- Página archivada en MHTML, código fuente, cabeceras HTTP, certificado TLS del
-  servidor y archivo `hosts` del equipo: acreditan en qué condiciones se accedió.
-- Multimedia original de Instagram, Facebook (yt-dlp) y WhatsApp Web, con hash
-  propio: es el archivo tal como lo sirve la plataforma, no una regrabación.
+- Capturas de pantalla y de página completa. Los recorridos de comentarios, de listas de
+  contactos y de conversaciones de WhatsApp Web se hacen solos, desplazando con la rueda
+  del mouse como lo haría una persona.
+- Video de la sesión con FFmpeg, tráfico de red en HAR 1.2 y archivo WARC (ISO 28500).
+- La página archivada en MHTML, su código fuente, las cabeceras HTTP, el certificado TLS
+  del servidor y el archivo hosts del equipo. Con eso se acredita a qué servidor se
+  accedió y que el dominio no estaba desviado.
+- El multimedia original de Instagram, Facebook (con yt-dlp) y WhatsApp Web, con hash
+  propio. Es el archivo que sirve la plataforma, no una regrabación de la pantalla.
 
-## Qué garantiza
+## Qué queda escrito
 
-| | |
-|---|---|
-| **Cada archivo** | SHA-256 + acta de custodia (`.sha256` y `.custodia.txt` al lado) |
-| **Sello de tiempo** | RFC 3161 con la firma **verificada** contra cuatro raíces fijadas en el programa; una respuesta que no verifica se rechaza y se deja constancia |
-| **Log de auditoría** | cada entrada encadenada con SHA-256 y la cadena firmada con una clave Ed25519 que vive solo en memoria y nunca se escribe en disco |
-| **La herramienta** | hash del ejecutable y del conjunto de sus 344 archivos, con el manifiesto adentro del paquete |
-| **El reloj** | contrastado contra la hora firmada de la autoridad de sellado, que no se puede falsear en el camino, además de NTP |
-| **El paquete** | ZIP con todo, su hash fuera del ZIP, sello RFC 3161 propio y la cadena de certificados de la autoridad |
+Cada archivo adquirido lleva al lado su `.sha256` y su `.custodia.txt`.
 
-## Verificar un caso (sin este programa)
+El sello de tiempo es RFC 3161, y antes de darlo por bueno el programa verifica la firma
+contra cuatro raíces que trae fijadas. Si una autoridad contesta algo que no verifica, se
+rechaza y queda asentado. Cuatro de las cinco autoridades responden por http, así que esa
+respuesta pudo haberla fabricado cualquiera en el camino.
+
+El log de auditoría encadena cada entrada con la anterior usando SHA-256. La cadena se
+firma con una clave Ed25519 que se genera al abrir el caso, vive en memoria y no se
+escribe nunca en disco; al terminar el empaquetado se descarta. Desde ahí nadie puede
+agregar entradas firmadas, el perito tampoco.
+
+De la herramienta se declaran dos hashes: el del ejecutable y el del conjunto de sus 344
+archivos, con el manifiesto adentro del paquete. Contra el manifiesto oficial de la
+versión se ve enseguida si alguien reemplazó un componente, que es lo que el hash del
+.exe solo no mostraba.
+
+El reloj del equipo se contrasta con la hora firmada por la autoridad de sellado, además
+del NTP de siempre. La consulta NTP viaja sin autenticar y cualquiera en la red puede
+contestarla; la hora del sello está firmada.
+
+El paquete final es un ZIP con todo adentro. Su hash va afuera, en el sidecar, el acta y
+un sello RFC 3161 propio, acompañado por la cadena de certificados de la autoridad.
+
+Del equipo salen tres cosas: el hash a sellar, la consulta de hora y la comprobación del
+código de los portales de Meta contra Cloudflare. La prueba adquirida no se sube a
+ninguna parte.
+
+## Verificar un caso sin este programa
 
 ```bash
 python verificar_caso.py <carpeta del caso>
 ```
 
-Solo usa la biblioteca estándar de Python: recalcula el hash de cada archivo,
-contrasta el registro de evidencias, recorre el encadenamiento del log y
-comprueba sus firmas Ed25519 (implementación de referencia del RFC 8032
-incluida en el propio verificador).
+Usa solo la biblioteca estándar. Recalcula el hash de cada archivo, contrasta el registro
+de evidencias, recorre el encadenamiento del log y comprueba sus firmas. La
+implementación de referencia de Ed25519 del RFC 8032 va adentro del propio verificador,
+así que no hay que instalar nada.
 
-Archivo suelto:
+Un archivo suelto:
 
 ```bash
 certutil -hashfile <archivo> SHA256
 ```
 
-Sello de tiempo del paquete:
+El sello del paquete:
 
 ```bash
 openssl ts -verify -data <caso>.zip -in <caso>.zip.tsr -CAfile <caso>.zip.tsa.pem
@@ -65,38 +81,38 @@ openssl ts -verify -data <caso>.zip -in <caso>.zip.tsr -CAfile <caso>.zip.tsa.pe
 compilar_onedir.bat
 ```
 
-Hace tres cosas: corre el control de nombres sin definir (si falla, no compila),
-compila con PyInstaller desde `.venv-forense` y escribe el manifiesto oficial de
-archivos de la versión. El instalador se arma aparte:
+Hace tres cosas: revisa que no haya nombres sin definir (si encuentra alguno no compila),
+arma el ejecutable con PyInstaller desde `.venv-forense` y escribe el manifiesto oficial
+de archivos de la versión. El instalador va aparte:
 
 ```bat
 "C:\Program Files\Inno Setup 7\ISCC.exe" instalador.iss
 ```
 
-Entorno de compilación fijado en `requirements-build.txt`. El entorno se arma
-aparte del Python del sistema a propósito: con otros *bindings* de Qt instalados
-PyInstaller aborta.
+El entorno está fijado en `requirements-build.txt`, separado del Python del sistema a
+propósito: con otros bindings de Qt instalados PyInstaller aborta.
 
 ## Pruebas
 
-En `desarrollo/`. Cada una ejecuta el código del programa, no una copia de su
-lógica, y acepta la ruta de un `.py` para correrla contra un respaldo anterior y
-comprobar que ahí falla.
+Están en `desarrollo/`. Cada una ejecuta el código del programa y no una copia de su
+lógica, y acepta la ruta de un `.py` para correrla contra un respaldo viejo y comprobar
+que ahí falla.
 
 ```bat
 .venv-forense\Scripts\python.exe -u desarrollo\test_sello_verificado.py
 ```
 
-Las que abren el motor (listas, comentarios, rueda, descargas) **se corren de a
-una**: dos procesos de QtWebEngine en paralelo se tiran abajo y parece un fallo
-del programa.
+Las que abren el motor (listas, comentarios, rueda, descargas) se corren de a una. Dos
+procesos de QtWebEngine al mismo tiempo se tiran abajo y parece un fallo del programa.
 
-## Limitación conocida
+## Lo que no hace
 
-El motor no incluye los códecs H.264/AAC —no vienen compilados en la versión
-abierta de Qt WebEngine, y no los traen ni los *wheels* de Riverbank ni los de la
-propia Qt Company—, así que el video de WhatsApp e Instagram no se reproduce
-dentro del navegador y su recuadro puede verse en negro. El contenido no se
-pierde: se adquiere como archivo original con su hash y se reproduce en el visor
-del programa, que usa los códecs del sistema. El dictamen lo declara y
-transcribe los formatos que el motor informó en esa diligencia.
+El motor no reproduce H.264 ni AAC. No vienen compilados en la versión abierta de Qt
+WebEngine y no hay forma de agregarlos desde afuera: se probó con los wheels de Riverbank
+y con los de la propia Qt Company, y ninguno los trae. El video de WhatsApp y de
+Instagram no se ve dentro del navegador, y el recuadro puede quedar en negro también en
+la grabación de la sesión.
+
+El contenido igual no se pierde. Se adquiere como archivo original con su hash y se mira
+en el visor del programa, que usa los códecs de Windows. El dictamen lo declara y
+transcribe qué formatos informó el motor ese día.
