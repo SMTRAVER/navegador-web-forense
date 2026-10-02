@@ -102,6 +102,14 @@ que ahí falla.
 .venv-forense\Scripts\python.exe -u desarrollo\test_sello_verificado.py
 ```
 
+El informe de validación se arma corriéndolas a todas y queda en
+[VALIDACION.md](VALIDACION.md): cada requisito con la prueba que lo verifica, el
+resultado de esa corrida y lo que la herramienta no cumple.
+
+```bat
+.venv-forense\Scripts\python.exe -u desarrollo\validacion_cftt.py
+```
+
 Las que abren el motor (listas, comentarios, rueda, descargas) se corren de a una. Dos
 procesos de QtWebEngine al mismo tiempo se tiran abajo y parece un fallo del programa.
 
