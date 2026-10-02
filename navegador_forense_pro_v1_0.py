@@ -36,15 +36,15 @@ import re
 # SharedArrayBuffer no existe, y el resultado era que las fotos se adquirian
 # y los videos no.
 #
-# Va antes de crear QApplication —de hecho antes de importar Qt— porque
+# Va antes de crear QApplication (de hecho antes de importar Qt) porque
 # despues de eso el motor ya esta configurado y la variable se ignora. Se
 # agrega a lo que hubiera, sin pisarlo.
 #
 # SharedArrayBuffer queda habilitado para todos los sitios, y eso tiene un
 # costo: devuelve a las paginas un reloj de alta resolucion, que es la materia
 # prima de los ataques de canal lateral tipo Spectre para leer memoria de otro
-# sitio. La contencion es el aislamiento de sitios —cada sitio en un proceso
-# propio, asi no hay memoria ajena que leer—, y se fuerza con --site-per-process
+# sitio. La contencion es el aislamiento de sitios (cada sitio en un proceso
+# propio, asi no hay memoria ajena que leer), y se fuerza con --site-per-process
 # en lugar de confiar en el valor por defecto del motor, que Chromium relaja en
 # algunos equipos. Las dos cosas quedan declaradas en el dictamen.
 _flags_previas = os.environ.get("QTWEBENGINE_CHROMIUM_FLAGS", "")
@@ -119,7 +119,7 @@ try:
 except Exception:
     pass
 
-# Suprimir warnings verbosos de Qt en consola — se unifican TODAS las reglas aquí
+# Suprimir warnings verbosos de Qt en consola, se unifican TODAS las reglas aquí
 # para evitar que un segundo setdefault() más abajo no tenga efecto (setdefault
 # no sobreescribe un valor ya existente).
 
@@ -160,10 +160,10 @@ TSA_URL = "http://timestamp.digicert.com"
 #
 # Las direcciones son http y no https a proposito. No es un descuido ni una
 # rebaja de seguridad: el protocolo RFC 3161 no viaja en claro en el sentido
-# que importa, porque lo que se envia es un hash —no el archivo— y lo que
+# que importa, porque lo que se envia es un hash (no el archivo) y lo que
 # vuelve es un token firmado por la autoridad. Si alguien lo alterara en el
-# camino, la firma no verificaria —y el programa la verifica antes de
-# aceptarla, ver verificar_sello—. Por eso las TSA publican sus puntos de
+# camino, la firma no verificaria (y el programa la verifica antes de
+# aceptarla, ver verificar_sello). Por eso las TSA publican sus puntos de
 # acceso sobre http, y DigiCert directamente rechaza las peticiones por https:
 # se comprobo que sobre https agotaba los 5 segundos de espera y fallaba
 # siempre, mientras que sobre http responde en menos de medio segundo. Con
@@ -187,7 +187,7 @@ _PERITO_CONFIG_FILENAME = "perito.json"
 def _load_perito_config() -> Dict[str, str]:
     """
     Carga datos del perito desde perito.json (mismo directorio que el script).
-    Si no existe, devuelve dict vacío — el usuario completa los campos en el Setup.
+    Si no existe, devuelve dict vacío: el usuario completa los campos en el Setup.
     Esto evita que los datos personales del autor queden hardcodeados en el código.
 
     Formato de perito.json:
@@ -285,8 +285,8 @@ HTML_EXTS  = {".html", ".htm", ".mhtml", ".mht"}
 
 # Estos dos recorridos se reproducen enteros en el anexo de vistas del
 # dictamen. El registro de evidencias los muestra en miniatura chica: la
-# misma imagen embebida dos veces —media hoja en el registro y otra vez en el
-# anexo— duplicaba el peso del informe sin agregar nada, porque el registro
+# misma imagen embebida dos veces (media hoja en el registro y otra vez en el
+# anexo) duplicaba el peso del informe sin agregar nada, porque el registro
 # esta para identificar el archivo y acreditar su hash, no para leerlo.
 # Debe coincidir con los tipos del anexo de vistas; la prueba
 # desarrollo/test_peso_dictamen.py lo verifica contra el texto del programa.
@@ -312,7 +312,7 @@ JS_SPAM_PATTERNS = [
     "performanceobserver", "buffered flag", "entrytypes",
     "moov atom not found", "trun track id unknown", "no tfhd was found",
     "error reading header", "[mov,mp4,m4a,3gp,3g2,mj2",
-    # FFmpeg — advertencias normales de audio/red, no indican fallo de adquisición
+    # FFmpeg: advertencias normales de audio/red, no indican fallo de adquisición
     "could not update timestamps for skipped samples",
     "failed to send close message",
     "aac @", "[tls @", "[aac @",
@@ -552,8 +552,8 @@ def exportar_dfxml(case, destino=None) -> Optional[Dict[str, Any]]:
     Por que suma: el registro de evidencias vive en una base SQLite propia de
     este programa y el dictamen es un PDF para leer. Ninguno de los dos sirve
     para que otra herramienta procese el caso automaticamente. DFXML es el
-    formato con que la informatica forense intercambia justamente eso —que
-    archivos hay, de que tamano, con que hashes y cuando se tomaron— y lo leen
+    formato con que la informatica forense intercambia justamente eso (que
+    archivos hay, de que tamano, con que hashes y cuando se tomaron) y lo leen
     utilidades independientes como las de la familia fiwalk / DFXML de NIST.
 
     Es la contracara del verificador: aquel permite comprobar el caso sin este
@@ -668,12 +668,12 @@ def write_custody_sidecar(path: str, tipo: str, source_url: str,
     Genera DOS archivos sidecar junto al archivo adquirido, INMEDIATAMENTE
     después de que el archivo está cerrado y su contenido es definitivo.
 
-    Los sidecar son la evidencia primaria de cadena de custodia — existen
+    Los sidecar son la evidencia primaria de cadena de custodia, existen
     incluso si el reporte principal se pierde o corrompe.
 
     Archivos generados (mismo nombre base que el archivo, distinta extensión):
-      • <archivo>.sha256       — hash SHA-256 raw (formato: HASH *FILENAME)
-      • <archivo>.custodia.txt — acta de adquisición legible y verificable
+      • <archivo>.sha256      , hash SHA-256 raw (formato: HASH *FILENAME)
+      • <archivo>.custodia.txt, acta de adquisición legible y verificable
 
     Retorna dict con todos los datos calculados.
     """
@@ -685,14 +685,14 @@ def write_custody_sidecar(path: str, tipo: str, source_url: str,
     sha = sha256_file(path)
     size = os.path.getsize(path)
 
-    # .sha256 — formato estándar sha256sum
+    # .sha256: formato estándar sha256sum
     # Verificación: sha256sum -c archivo.sha256  (Linux/macOS)
     #               certutil -hashfile archivo SHA256  (Windows)
     sha256_path = str(p) + ".sha256"
     with open(sha256_path, "w", encoding="utf-8") as f:
         f.write(f"{sha} *{p.name}\n")
 
-    # .custodia.txt — acta de adquisición
+    # .custodia.txt: acta de adquisición
     custodia_path = str(p) + ".custodia.txt"
     sep = "=" * 70
     acta_lines = [
@@ -763,7 +763,7 @@ def write_custody_sidecar(path: str, tipo: str, source_url: str,
 def get_ntp_info() -> Dict[str, Any]:
     """
     Consulta pool.ntp.org y retorna offset del reloj local respecto a UTC.
-    ISO 27037 exige documentar la fuente de tiempo — un offset elevado hace
+    ISO 27037 exige documentar la fuente de tiempo, un offset elevado hace
     impugnable toda la línea de tiempo forense.
     Retorna dict con resultado o error si no hay red.
     """
@@ -798,7 +798,7 @@ def get_ntp_info() -> Dict[str, Any]:
 def get_site_metadata(url: str) -> Dict[str, Any]:
     """
     Captura DNS, IP, geolocalización y headers HTTP del servidor de destino.
-    Se llama en background al navegar — no bloquea la UI.
+    Se llama en background al navegar: no bloquea la UI.
     """
     import requests as _req
     from urllib.parse import urlparse
@@ -819,7 +819,7 @@ def get_site_metadata(url: str) -> Dict[str, Any]:
         except Exception:
             ip = None
             meta["ip"] = "N/A"
-        # Geolocalización (ipapi.co — sin API key, uso libre)
+        # Geolocalización (ipapi.co, sin API key, uso libre)
         if ip and not ip.startswith(("10.", "192.168.", "172.")):
             try:
                 geo = _req.get(f"https://ipapi.co/{ip}/json/",
@@ -1053,7 +1053,7 @@ def version_motor() -> str:
     """
     Version del motor del navegador y su nivel de parches de seguridad.
 
-    Qt WebEngine parte de una base de Chromium —hoy la 140— y le incorpora los
+    Qt WebEngine parte de una base de Chromium (hoy la 140) y le incorpora los
     parches de seguridad de versiones posteriores. Para saber si el navegador
     que abrio las paginas tenia vulnerabilidades conocidas, el numero que
     importa es el segundo. Se declara en el dictamen y en cada acta porque el
@@ -1087,7 +1087,7 @@ def manifiesto_de_la_herramienta(carpeta: Optional[str] = None,
 
     Se cubre exactamente lo que copia el instalador: el .exe y todo _internal.
     Quedan afuera el desinstalador que agrega Inno Setup y las carpetas de
-    trabajo —casos, perfiles— que viven al lado y cambian con el uso.
+    trabajo (casos, perfiles) que viven al lado y cambian con el uso.
 
     El manifiesto tiene una linea por archivo, "<sha256>  <ruta>", ordenado por
     ruta; el hash del conjunto es el SHA-256 de ese texto. Un tercero puede
@@ -1152,7 +1152,7 @@ def descarga_del_programa(pendiente, wa_activo: bool) -> bool:
     Si una descarga la pidio el propio programa.
 
     Las pide en dos casos: cuando archiva una pagina o baja una foto de perfil
-    —y entonces deja el aviso en _pagina_pendiente— y durante el recorrido de
+    (y entonces deja el aviso en _pagina_pendiente) y durante el recorrido de
     multimedia de WhatsApp, que hace clic en cada archivo. Cualquier otra
     descarga la inicio la pagina o el perito a mano, y no puede entrar sola a
     la carpeta de evidencias: una pagina puede disparar descargas sin que nadie
@@ -1184,7 +1184,7 @@ def verificar_log(db_path, clave_publica_hex: str, case_id: str) -> Dict[str, An
     Devuelve las entradas donde la cadena se rompe ('rotas'), los cierres cuya
     firma no verifica ('cierres_invalidos') y cuantas entradas estan cubiertas
     por una firma valida ('firmadas'). Durante la sesion es normal que las
-    ultimas entradas —hasta FIRMA_LOG_CADA— esten encadenadas y sin firmar.
+    ultimas entradas (hasta FIRMA_LOG_CADA) esten encadenadas y sin firmar.
     """
     from cryptography.exceptions import InvalidSignature
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
@@ -1379,13 +1379,13 @@ def datos_del_sello(lineas):
     Prepara los datos del sello para grabarlos DENTRO del PNG.
 
     El sello dejo de dibujarse sobre la imagen. Primero estuvo encima y tapaba
-    contenido —en la pagina completa se comia los ultimos 126 pixeles, y en el
-    recorte de una columna de comentarios, los comentarios—. Despues paso a una
+    contenido (en la pagina completa se comia los ultimos 126 pixeles, y en el
+    recorte de una columna de comentarios, los comentarios). Despues paso a una
     franja negra agregada abajo, que no tapaba nada pero seguia ensuciando una
     imagen que se acompana como prueba de como se veia la pagina.
 
-    Ahora no se ve: los mismos datos —herramienta, causa, momento, hash y
-    perito— van en los campos de texto del propio PNG. La imagen queda limpia,
+    Ahora no se ve: los mismos datos (herramienta, causa, momento, hash y
+    perito) van en los campos de texto del propio PNG. La imagen queda limpia,
     sin un pixel agregado, y el archivo se sigue identificando solo aunque se
     lo separe de su acta. Se leen con cualquier visor de metadatos, o con
     Pillow: Image.open(ruta).text
@@ -1422,8 +1422,8 @@ def imagen_para_informe(origen: str, ancho_mm: float, carpeta_temp: Path,
 
     Sin esto el informe se vuelve inmanejable. Se midio sobre un dictamen real:
     110 MB en 417 hojas, de los cuales 109,9 MB eran imagenes y solo 0,7 MB
-    texto. Las capturas se embebian enteras —2560 px de ancho, que impresas a
-    135 mm son 482 dpi— y ademas sin perdida, a 900 KB cada una, para mostrarse
+    texto. Las capturas se embebian enteras (2560 px de ancho, que impresas a
+    135 mm son 482 dpi) y ademas sin perdida, a 900 KB cada una, para mostrarse
     del tamaño de media hoja.
 
     Lo que se recorta es resolucion sobrante y no contenido: a 200 dpi el texto
@@ -1486,8 +1486,8 @@ def logo_para_portada() -> str:
     El archivo original mide 800x638 px y pesa 617 KB. La portada lo muestra en
     42 mm, que a 200 dpi son 330 px: todo lo demas es resolucion que nadie ve.
     fpdf2 embebe los PNG sin perdida, asi que ese logo agregaba 737 KB medidos
-    a CADA dictamen —mas que todo el texto de un informe de 417 hojas, que
-    pesaba 0,7 MB—. Reducido cuesta 25 KB.
+    a CADA dictamen (mas que todo el texto de un informe de 417 hojas, que
+    pesaba 0,7 MB). Reducido cuesta 25 KB.
 
     Se calcula una sola vez por ejecucion y queda en el temporal del sistema,
     fuera de la carpeta del caso: es papeleria del informe, no evidencia. Si
@@ -1548,13 +1548,13 @@ def generate_speaker_icon(output_dir: Path, size: int = 100) -> str:
 # anterior el token se pedia y se guardaba sin comprobar nada: ni la firma, ni
 # que sellara el hash pedido, ni que respondiera a este pedido. Como casi todas
 # las autoridades responden por http, cualquiera en el camino de red podia
-# devolver un token inventado —o uno autentico de otro archivo— y el programa
+# devolver un token inventado (o uno autentico de otro archivo) y el programa
 # lo consignaba en el dictamen como sello valido. Solo lo habria descubierto un
 # tercero corriendo openssl.
 #
 # Estas son las raices que el programa acepta, identificadas por el hash
 # SHA-256 de su clave publica y no por el certificado: la misma raiz circula en
-# dos versiones —autofirmada y firmada en forma cruzada por una raiz anterior—
+# dos versiones (autofirmada y firmada en forma cruzada por una raiz anterior)
 # y cada autoridad manda una u otra. La clave es la misma en las dos.
 #
 # No se usa el almacen de certificados de Windows para decidir: el resultado
@@ -1776,8 +1776,8 @@ def _raiz_que_cierra(cert):
     """
     Busca en el almacen de Windows la raiz autofirmada que emitio `cert`.
 
-    No interviene en la decision de aceptar el sello —eso lo resuelve
-    RAICES_TSA—. Sirve para el tercero que verifique con openssl: tres de las
+    No interviene en la decision de aceptar el sello (eso lo resuelve
+    RAICES_TSA). Sirve para el tercero que verifique con openssl: tres de las
     cuatro autoridades mandan su raiz firmada en forma cruzada, y openssl no
     cierra la cadena sin la version autofirmada de quien la firmo.
     """
@@ -1913,7 +1913,7 @@ def escribir_sello_aparte(ruta: str, digest_hex: str) -> Optional[Dict[str, Any]
       <archivo>.tsa.pem  su cadena de certificados, hasta una raiz autofirmada
 
     Antes se escribia solo el token con extension .tsr, y la instruccion del
-    dictamen —openssl ts -verify -in <caso>.zip.tsr— fallaba tal como estaba
+    dictamen (openssl ts -verify -in <caso>.zip.tsr) fallaba tal como estaba
     escrita: openssl espera la respuesta, no el token. Se comprobo con
     OpenSSL 3.5 sobre respuestas reales de las cuatro autoridades.
     """
@@ -1969,7 +1969,7 @@ class ForensicCase:
         self._entradas_log = 0
         self._sin_firmar = 0
 
-        # Sincronización NTP al inicio del caso — ISO 27037 exige documentar
+        # Sincronización NTP al inicio del caso: ISO 27037 exige documentar
         # la fuente de tiempo. Se hace antes de escribir el manifest.
         self.ntp_info = get_ntp_info()
 
@@ -2014,7 +2014,7 @@ class ForensicCase:
         self.evidences: List[Dict] = []
 
         # Buffer en memoria para el log de red (categoría NETWORK). Evita abrir
-        # una conexión SQLite por cada petición — se vuelca en lote periódicamente.
+        # una conexión SQLite por cada petición: se vuelca en lote periódicamente.
         self._net_buffer: List[tuple] = []
         self._net_lock = threading.Lock()
 
@@ -2108,7 +2108,7 @@ class ForensicCase:
     def log_network(self, message: str):
         """
         Registro de red de alto volumen (categoría NETWORK). Solo lo guarda en
-        un buffer en memoria — NO abre la base de datos. El volcado a SQLite se
+        un buffer en memoria: NO abre la base de datos. El volcado a SQLite se
         hace en lote con flush_network_log(). Esto evita cientos de escrituras a
         disco por segundo durante la navegación, que hacían que las
         publicaciones cargaran lento.
@@ -2172,8 +2172,8 @@ class ForensicCase:
         Firma el extremo actual de la cadena del log y lo guarda en firmas_log.
 
         Se firma el caso, la ultima entrada, cuantas hay y el eslabon de esa
-        entrada. Quien rehaga el log despues —aunque recalcule la cadena
-        entera— no puede producir firmas que verifiquen con la clave publica
+        entrada. Quien rehaga el log despues (aunque recalcule la cadena
+        entera) no puede producir firmas que verifiquen con la clave publica
         del manifiesto.
 
         Devuelve lo firmado, o None si ya no hay clave (caso empaquetado) o si
@@ -2437,7 +2437,7 @@ class ForensicNetworkInterceptor(QWebEngineUrlRequestInterceptor):
         media_type = self._classify_media(url)
         if media_type:
             # Descartar segmentos DASH (bytestart/byteend): son fragmentos parciales,
-            # no el video completo — no son descargables directamente.
+            # no el video completo: no son descargables directamente.
             if "bytestart=" in url and "byteend=" in url:
                 return
             norm = self._normalize_url(url)
@@ -2730,7 +2730,7 @@ class MediaAcquisition(QThread):
                 if size_actual == 0:
                     raise Exception("Archivo descargado vacio (0 bytes)")
 
-                # CADENA DE CUSTODIA — sidecar inmediato
+                # CADENA DE CUSTODIA: sidecar inmediato
                 # El archivo ya está cerrado. El hash es definitivo e irrefutable.
                 sid = write_custody_sidecar(
                     path       = str(path),
@@ -2788,7 +2788,7 @@ class MediaAcquisition(QThread):
         ORDEN DE PRIORIDAD (de mayor a menor confiabilidad):
           1. URL contiene extensión explícita reconocible
           2. Content-Disposition filename
-          3. Content-Type (video/audio ANTES que imagen — evita tomar preview JPG)
+          3. Content-Type (video/audio ANTES que imagen, evita tomar preview JPG)
           4. Fallback .bin
         """
         url_lower = url.lower().split("?")[0]   # ignorar query string para la extensión
@@ -2815,7 +2815,7 @@ class MediaAcquisition(QThread):
             except Exception:
                 pass
 
-        # 4. Content-Type — VIDEO/AUDIO primero, imagen al final
+        # 4. Content-Type, VIDEO/AUDIO primero, imagen al final
         # Esto evita que un thumbnail JPG interceptado antes del video
         # se clasifique como imagen cuando el Content-Type real es video/*
         ct_map_ordered = [
@@ -2838,7 +2838,7 @@ class MediaAcquisition(QThread):
             ("audio/x-wav",          ".wav"),
             ("audio/mp4",            ".m4a"),
             ("audio/",               ".mp3"),   # genérico audio/*
-            # Imagen (al final — baja prioridad)
+            # Imagen (al final: baja prioridad)
             ("image/jpeg",           ".jpg"),
             ("image/png",            ".png"),
             ("image/webp",           ".webp"),
@@ -2854,7 +2854,7 @@ class MediaAcquisition(QThread):
 class MediaPlayerDialog(QDialog):
     """
     Reproductor forense para cualquier video/audio (URL directa o archivo local).
-    No registra evidencia — es solo para VERIFICAR el contenido.
+    No registra evidencia: es solo para VERIFICAR el contenido.
     """
 
     def __init__(self, source_url: str = "", default_open_dir: str = "", parent=None):
@@ -3529,7 +3529,7 @@ _WA_ESCANEAR_JS = r"""
 # esta en la pagina: WhatsApp no lo bajo ni lo descifro, y el menu no tiene
 # nada que entregar. Por eso hay que pulsarlo primero y esperar.
 #
-# Se reconoce por el tamano —KB, MB, GB son iguales en todos los idiomas— y
+# Se reconoce por el tamano (KB, MB, GB son iguales en todos los idiomas) y
 # por el icono de descarga.
 _WA_TRAER_JS = r"""
 (function () {
@@ -3775,7 +3775,7 @@ _WA_CERRAR_JS = r"""
 #
 # Es el sentido que usa la captura de pantalla: el perito deja la conversacion
 # donde quiere empezar y el recorrido va desde ahi hasta el ultimo mensaje.
-# Asi las capturas quedan en orden cronologico —la 001 es la mas antigua— y el
+# Asi las capturas quedan en orden cronologico (la 001 es la mas antigua) y el
 # punto de partida lo elige el perito, no el programa.
 _WA_AVANZAR_JS = r"""
 (function () {
@@ -3853,7 +3853,7 @@ _PAG_IR_JS = r"""
 # Se leen del DOM renderizado y NO del JSON que Instagram embebe. Se comprobo
 # contra una pagina real que ese JSON ya no trae los datos del perfil visitado:
 # follower_count, media_count e is_verified no aparecen, y los campos que si
-# estan —full_name, biography, profile_pic_url_hd— corresponden al usuario con
+# estan (full_name, biography, profile_pic_url_hd) corresponden al usuario con
 # la sesion abierta, no al perfil que se esta mirando.
 #
 # Leerlos de ahi habria registrado los datos del propio perito como si fueran
@@ -3950,7 +3950,7 @@ _IG_DATOS_JS = r"""
 # Es un dato del entorno de adquisicion, como la version del sistema o la hora
 # NTP, y por eso queda registrado. Ademas resuelve una pregunta practica: si el
 # motor cae al dibujado por software todo se vuelve lento, y desde afuera no
-# hay modo de saberlo —se ve igual, solo que tarda—.
+# hay modo de saberlo (se ve igual, solo que tarda).
 #
 # Se pregunta por WebGL porque es la unica via que la pagina tiene para
 # informar que motor grafico hay debajo.
@@ -4003,8 +4003,8 @@ _RENDER_JS = r"""
 # rueda, que recortar en la captura y en que posicion del panel se esta.
 #
 # La caja se recorta a lo que se ve de ella. Cuando de esa interseccion no
-# queda nada util —la columna se fue de la vista, o asoma una franja de pocos
-# pixeles— se apunta a la ventana entera: con un rectangulo degenerado el
+# queda nada util (la columna se fue de la vista, o asoma una franja de pocos
+# pixeles) se apunta a la ventana entera: con un rectangulo degenerado el
 # recorte sale inservible y la rueda cae sobre un borde, y el recorrido se
 # detiene sin avisar. Los dos casos se midieron: centro (692,-120) con la
 # columna por encima de la vista, y una caja de 1692 x 48 con la lista de
@@ -4105,8 +4105,8 @@ _JS_MEDIR = r"""
 #
 # Solo lee: el desplazamiento lo hace el programa con la rueda del mouse, no
 # este script. Se comprobo contra Instagram que mover la lista asignando
-# scrollTop no dispara la carga del siguiente lote —el indicador de carga
-# queda girando y no llegan mas cuentas—, mientras que la rueda de verdad si.
+# scrollTop no dispara la carga del siguiente lote (el indicador de carga
+# queda girando y no llegan mas cuentas), mientras que la rueda de verdad si.
 # Es el mismo comportamiento que con el multimedia de WhatsApp: hay acciones
 # que la pagina solo atiende cuando la entrada viene del sistema.
 _LISTA_JS = r"""
@@ -4261,7 +4261,7 @@ _LISTA_FINAL_JS = r"""
 # pm"). Se guarda eso.
 #
 # TikTok es la excepcion: no publica el instante en ninguna parte del documento
-# —solo "8-15" o "Hace 5 dia(s)"— asi que ahi se guarda lo que hay y el listado
+# (solo "8-15" o "Hace 5 dia(s)") asi que ahi se guarda lo que hay y el listado
 # lo dice. La limitacion es de la plataforma; ocultarla seria dar por precisa
 # una fecha que no lo es.
 _COM_JS = r"""
@@ -4614,7 +4614,7 @@ class DictamenForense(FPDF):
         self.cell(0, 6, self._s(f"ID del caso: {case_id}"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         self.set_x(62)
         self.cell(0, 6, self._s(f"Generacion: {ts_gen}"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        # Autor del software (siempre fijo — independiente del perito actuante)
+        # Autor del software (siempre fijo: independiente del perito actuante)
         self.set_x(62)
         self.set_font("helvetica", "B", 9)
         self.set_text_color(*self.C_VERDE_OS)
@@ -4928,7 +4928,7 @@ class TraversoWebForensicsPro(QMainWindow):
         main_layout = QVBoxLayout(central)
         main_layout.setContentsMargins(0, 0, 0, 0)
 
-        # Header original v1.0 — 120px con logo, info y todos los botones
+        # Header original v1.0, 120px con logo, info y todos los botones
         header = QFrame()
         header.setFixedHeight(120)
         header.setStyleSheet("background-color: #0d1b2a; border-bottom: 3px solid #1b263b;")
@@ -5018,7 +5018,7 @@ class TraversoWebForensicsPro(QMainWindow):
         h_lay.addWidget(btn_exit)
         main_layout.addWidget(header)
 
-        # Barra de navegación original v1.0 — 55px
+        # Barra de navegación original v1.0, 55px
         nav = QFrame()
         nav.setStyleSheet("background: #f8f9fa; border-bottom: 1px solid #ddd;")
         nav_lay = QHBoxLayout(nav)
@@ -5026,7 +5026,7 @@ class TraversoWebForensicsPro(QMainWindow):
         nav_lay.setSpacing(6)
         self.url_bar = QLineEdit()
         self.url_bar.setPlaceholderText("https://...")
-        self.url_bar.setMinimumHeight(46)             # altura mínima garantizada — los descendentes nunca se cortan
+        self.url_bar.setMinimumHeight(46)             # altura mínima garantizada, los descendentes nunca se cortan
         self.url_bar.setStyleSheet(
             "color: black; padding: 8px 10px; font-size: 13pt; "
             "border: 1px solid #bbb; border-radius: 3px;"
@@ -5458,7 +5458,7 @@ class TraversoWebForensicsPro(QMainWindow):
         self.setCentralWidget(central)
 
     # ══════════════════════════════════════════════════════════════════════
-    #  TAB EVIDENCIAS — inventario en vivo con verificación de integridad
+    #  TAB EVIDENCIAS: inventario en vivo con verificación de integridad
     # ══════════════════════════════════════════════════════════════════════
     _EV_HEADERS = ["#", "Fecha / Hora", "Tipo", "Archivo", "Tamaño",
                    "SHA-256", "Sellado TSA", "URL de origen"]
@@ -6621,8 +6621,8 @@ class TraversoWebForensicsPro(QMainWindow):
         """
         Captura una parte de la vista del navegador y la registra como evidencia.
 
-        Sirve para dejar constancia visual de una region concreta —el panel de
-        la conversacion, por ejemplo— sin arrastrar el resto de la ventana del
+        Sirve para dejar constancia visual de una region concreta (el panel de
+        la conversacion, por ejemplo) sin arrastrar el resto de la ventana del
         programa, que no forma parte de lo observado.
 
         Sigue el mismo camino que capture_screenshot: el grab() va en el hilo
@@ -6737,7 +6737,7 @@ class TraversoWebForensicsPro(QMainWindow):
         causa, asi que se saco de raiz y no como una opcion que se pueda
         activar por error.
         """
-        # N3: time importado globalmente — import local eliminado
+        # N3: time importado globalmente: import local eliminado
         vid_dir = self.case.dirs.get("evidence_vid", Path("."))
         final_path = str(vid_dir / f"Sesion_{ts}_final.mp4")
 
@@ -6822,7 +6822,7 @@ class TraversoWebForensicsPro(QMainWindow):
             ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             fn = str(self.case.dirs["evidence_vid"] / f"Sesion_{ts}.mp4")
 
-            # mp4v a FPS fijo declarado — tiempo entre frames lo controla time.sleep()
+            # mp4v a FPS fijo declarado: tiempo entre frames lo controla time.sleep()
             self.video_out = cv2.VideoWriter(
                 fn, cv2.VideoWriter_fourcc(*"mp4v"),
                 float(self._rec_fps),
@@ -6920,12 +6920,12 @@ class TraversoWebForensicsPro(QMainWindow):
         Hilo de captura de pantalla.
 
         Correcciones vs v1.0:
-          • time.sleep() en lugar de cv2.waitKey() — cv2.waitKey() en threads sin
+          • time.sleep() en lugar de cv2.waitKey(), cv2.waitKey() en threads sin
             ventana OpenCV no garantiza el delay y produce timestamps irregulares
             que corrompen el moov atom del MP4 (libavformat assertion next_dts).
           • Tiempo de captura descontado del sleep (FPS estable).
           • try/except por frame: un error puntual (pantalla negra, screenshot
-            bloqueado) no mata el hilo — registra y sigue.
+            bloqueado) no mata el hilo: registra y sigue.
           • Lock en video_out.write() para evitar race condition con release().
           • threading.Event (_rec_stop_event) para señalización thread-safe.
             El hilo sale ANTES de que toggle_recording() llame a release().
@@ -7188,7 +7188,7 @@ class TraversoWebForensicsPro(QMainWindow):
                 if origen_data:
                     self._log_cookie_origin(total, origen_data)
                 else:
-                    # N6: no hay declaración de origen guardada — ofrecer el diálogo
+                    # N6: no hay declaración de origen guardada, ofrecer el diálogo
                     # directamente en lugar de solo mostrar un aviso pasivo.
                     self.append_console(
                         "  AVISO: No se encontró declaración de origen para estas cookies.\n"
@@ -7716,7 +7716,7 @@ class TraversoWebForensicsPro(QMainWindow):
                           f"Cancelado por perito | {plataforma} | @{profile_id}")
             return
 
-        # REGISTRO — solo se ejecuta si el perito confirmó con UID presente
+        # REGISTRO: solo se ejecuta si el perito confirmó con UID presente
         ts_iso = datetime.datetime.now().isoformat()
         entry = {
             "ts":           ts_iso,
@@ -7729,7 +7729,7 @@ class TraversoWebForensicsPro(QMainWindow):
             "perito":       self.perito_data.get("nombre", ""),
         }
 
-        # Ficha visual con los datos extraídos (imagen PNG) — registro visual
+        # Ficha visual con los datos extraídos (imagen PNG), registro visual
         # complementario a la captura de pantalla del navegador.
         ficha_path = self._render_profile_card(entry)
         if ficha_path:
@@ -7817,7 +7817,7 @@ class TraversoWebForensicsPro(QMainWindow):
 
         url_lower = url.lower()
 
-        # Caso 1: WhatsApp .enc — NO adquirible
+        # Caso 1: WhatsApp .enc, NO adquirible
         # Los archivos .enc de WhatsApp están cifrados E2E (AES-256-CBC +
         # HKDF-SHA256). Sin la media_key del dispositivo origen es imposible
         # desencriptarlos. Se registra la detección pero no se descarga.
@@ -8462,7 +8462,7 @@ class TraversoWebForensicsPro(QMainWindow):
         Que hacer cuando el menu no dio la descarga.
 
         Dos casos distintos. Los stickers no tienen opcion de descarga en
-        WhatsApp —su menu ofrece responder, reaccionar, reenviar y poco mas—,
+        WhatsApp (su menu ofrece responder, reaccionar, reenviar y poco mas),
         pero vienen ya descifrados y montados en la pagina: se exportan desde
         su blob. Para lo demas, lo probable es que el archivo aun no se haya
         traido del servidor, asi que se lo pide y se reintenta el menu.
@@ -9097,7 +9097,7 @@ class TraversoWebForensicsPro(QMainWindow):
 
     def _com_tramo(self):
         # Primero se lee y despues se captura, con el recorte que devuelve esa
-        # misma lectura. Al reves —capturar y despues leer— la imagen podia no
+        # misma lectura. Al reves (capturar y despues leer) la imagen podia no
         # corresponder a lo leido, y el recorte se calculaba dos veces en dos
         # lugares distintos.
         if not self._igc.get("activo"):
@@ -9186,8 +9186,8 @@ class TraversoWebForensicsPro(QMainWindow):
         # fondo del panel: estar al fondo es lo habitual mientras la pagina
         # trae el lote siguiente.
         #
-        # Sin panel con barra propia no hay lotes por venir —lo que se ve es
-        # todo— y esperar doce vueltas solo suma tramos. Con panel se espera,
+        # Sin panel con barra propia no hay lotes por venir (lo que se ve es
+        # todo) y esperar doce vueltas solo suma tramos. Con panel se espera,
         # porque ahi si puede estar cargando.
         tope = 12 if d.get("propio") else 2
         if w["sin_avance"] >= tope or w["tramo"] > 600:
@@ -10370,10 +10370,10 @@ class TraversoWebForensicsPro(QMainWindow):
         # el hash cambiaria y el valor impreso no podria verificarse nunca. Un
         # archivo no puede contener su propia huella.
         #
-        # La huella del paquete se consigna afuera —en el sidecar .sha256, en
+        # La huella del paquete se consigna afuera (en el sidecar .sha256, en
         # el acta de custodia y en el sello de tiempo .tsr con su cadena
         # .tsa.pem, todos al lado
-        # del ZIP y no adentro— y ahi si se puede recalcular y comparar. Lo que
+        # del ZIP y no adentro) y ahi si se puede recalcular y comparar. Lo que
         # este informe certifica es cada archivo por separado, con su hash, en
         # el registro de evidencias.
         if zip_info:
@@ -10463,10 +10463,10 @@ class TraversoWebForensicsPro(QMainWindow):
 
                 # En columnas: un listado de a uno por linea gastaria decenas
                 # de hojas sin ganar nada. Cuando las entradas traen nombre
-                # —Facebook— van dos por linea, porque ahi el nombre de la
+                # (Facebook) van dos por linea, porque ahi el nombre de la
                 # persona es el dato de la pericia y truncarlo a un tramo de
-                # URL dejaba el listado sin valor. Sin nombre —Instagram, donde
-                # el usuario ya identifica— entran tres.
+                # URL dejaba el listado sin valor. Sin nombre (Instagram, donde
+                # el usuario ya identifica) entran tres.
                 if cuentas:
                     con_nombre = any(n for _, n in cuentas)
                     cols = 2 if con_nombre else 3
@@ -10527,7 +10527,7 @@ class TraversoWebForensicsPro(QMainWindow):
                 # encabezado tiene un campo "Comentarios : N" que tambien
                 # empieza igual, y al descartarlo con un condicional que exigia
                 # haber pasado antes por la descripcion, los listados de
-                # Facebook —que no la tienen— quedaban sin una sola fila.
+                # Facebook (que no la tienen) quedaban sin una sola fila.
                 zona = "cab"
                 i = 0
                 while i < len(lineas):
@@ -10623,8 +10623,8 @@ class TraversoWebForensicsPro(QMainWindow):
                             _encabezado_tabla()
                         # El recuadro de cada celda se dibuja aparte del texto.
                         # Dejar que multi_cell trace su propio borde daba filas
-                        # con celdas de distinta altura —el autor ocupaba dos
-                        # renglones y el comentario uno— y los marcos no
+                        # con celdas de distinta altura (el autor ocupaba dos
+                        # renglones y el comentario uno) y los marcos no
                         # cerraban entre si.
                         y0, x0 = pdf.get_y(), pdf.l_margin
                         relleno = (k % 2 == 0)
@@ -11025,7 +11025,7 @@ class TraversoWebForensicsPro(QMainWindow):
                 pass
 
         # Generar sidecar de custodia para el PDF (igual que cada otra evidencia).
-        # El PDF ya está cerrado (pdf.output() lo finaliza) — el hash es definitivo.
+        # El PDF ya está cerrado (pdf.output() lo finaliza), el hash es definitivo.
         sid_pdf = write_custody_sidecar(
             path       = pdf_path,
             tipo       = "DICTAMEN_PDF",
@@ -11078,7 +11078,7 @@ class TraversoWebForensicsPro(QMainWindow):
           3. Generar el dictamen PDF
           4. Generar el ZIP con toda la evidencia, el dictamen incluido
           5. Calcular el SHA-256 del ZIP y escribir su sidecar, su acta de
-             custodia y su sello de tiempo RFC 3161 —los tres FUERA del ZIP
+             custodia y su sello de tiempo RFC 3161 (los tres FUERA del ZIP)
           6. Proteger los archivos como solo lectura y cerrar
 
         El dictamen va dentro del paquete y no lleva impreso el hash del
@@ -11176,8 +11176,8 @@ class TraversoWebForensicsPro(QMainWindow):
         #
         # El orden estaba al reves: se armaba el ZIP, se calculaba su hash y
         # recien despues se generaba el dictamen con ese hash impreso. El
-        # dictamen quedaba entonces FUERA del paquete —habia que entregarlo
-        # aparte— y, en cuanto alguien lo metia adentro para entregar una sola
+        # dictamen quedaba entonces FUERA del paquete (habia que entregarlo
+        # aparte) y, en cuanto alguien lo metia adentro para entregar una sola
         # cosa, el hash impreso dejaba de coincidir con el ZIP.
         #
         # Ahora se genera primero el dictamen, el ZIP lo incluye y la huella
@@ -11360,7 +11360,7 @@ class TraversoWebForensicsPro(QMainWindow):
                                 + (f" ({n_error_prot} con error)" if n_error_prot else ""))
 
             # Se borra el perfil de navegacion del caso. Guarda las cookies de
-            # la sesion del perito —credenciales activas de sus cuentas— y no
+            # la sesion del perito (credenciales activas de sus cuentas) y no
             # forma parte de la prueba: no hay motivo para conservarlo una vez
             # cerrado el caso, y si para eliminarlo.
             _perfil = getattr(self, "_perfil_dir", None)
