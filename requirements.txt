@@ -1,0 +1,74 @@
+# ==============================================================================
+# TRAVERSO FORENSICS - Web Forensics Pro v1.0
+# Archivo de dependencias Python
+# Autor: Miguel Angel Alfredo Traverso — Traverso Forensics
+# ==============================================================================
+#
+# INSTALACION COMPLETA (una sola vez, en el directorio del proyecto):
+#   pip install -r requirements.txt
+#
+# DEPENDENCIA EXTERNA — NO se instala con pip, requiere instalacion manual:
+# ------------------------------------------------------------------------------
+#   FFmpeg  →  https://ffmpeg.org/download.html
+#
+#   Windows (opcion A — manual):
+#     1. Descargar "Windows builds by BtbN" (ffmpeg-master-latest-win64-gpl.zip)
+#     2. Descomprimir en C:\ffmpeg\
+#     3. Agregar C:\ffmpeg\bin al PATH del sistema:
+#        Panel de Control → Sistema → Variables de entorno → Path → Nuevo
+#
+#   Windows (opcion B — Winget, recomendado):
+#     winget install ffmpeg
+#
+#   Windows (opcion C — Chocolatey):
+#     choco install ffmpeg
+#
+#   Verificar instalacion:
+#     ffmpeg -version
+#
+#   Sin FFmpeg el programa funciona con normalidad, PERO:
+#     • La grabacion de sesion NO tendra audio
+#     • El video se guarda sin compresion H.264 (archivos mas grandes)
+#     • No se realiza la transcodificacion de post-grabacion
+# ==============================================================================
+
+# ── INTERFAZ GRAFICA Qt6 ───────────────────────────────────────────────────
+PyQt6>=6.4.0
+PyQt6-Qt6>=6.4.0
+PyQt6-WebEngine>=6.4.0
+PyQt6-Qt6WebEngine>=6.4.0
+
+# ── CAPTURA DE PANTALLA Y PROCESAMIENTO DE VIDEO ───────────────────────────
+opencv-python>=4.7.0
+pyautogui>=0.9.54
+numpy>=1.24.0
+Pillow>=9.4.0
+
+# ── GENERACION DE DICTAMEN PDF ─────────────────────────────────────────────
+fpdf2>=2.7.4
+
+# ── RED Y DESCARGA DE EVIDENCIA ────────────────────────────────────────────
+requests>=2.31.0
+urllib3>=2.0.0
+
+# ── SELLADO DE TIEMPO RFC 3161 (ISO/IEC 27037) ─────────────────────────────
+# Sello criptografico de cada evidencia adquirida via TSA externa (DigiCert).
+rfc3161ng>=2.1.3
+
+# ── FIRMA DIGITAL DE PDF ────────────────────────────────────────────────────
+# Solo requerido si el perito dispone de certificado digital .p12/.pfx.
+# Se puede comentar si no se usa firma digital para reducir dependencias.
+endesive>=2.12.0
+cryptography>=41.0.0
+
+# ── SINCRONIZACION NTP ─────────────────────────────────────────────────────
+# ISO/IEC 27037 exige documentar la fuente de tiempo del sistema pericial.
+ntplib>=0.4.0
+
+# ── CODIGO QR EN DICTAMEN PDF ──────────────────────────────────────────────
+qrcode[pil]>=7.4.2
+
+# ── DESCARGA DE MEDIA (opcional) ───────────────────────────────────────────
+# Requerido para adquisicion de videos de YouTube, Instagram, Facebook, etc.
+# mediante yt-dlp. Comentar si no se necesita esta funcion.
+yt-dlp>=2024.1.0

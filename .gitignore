@@ -1,0 +1,30 @@
+# Material de trabajo y de casos. NUNCA entra al repositorio: son pruebas
+# periciales con datos de terceros, y una vez subidas quedan en la historia.
+NAV_FORENSE/
+perfiles_navegador/
+*.warc.gz
+*.har
+*.zip
+
+# Credenciales de sesion del perito
+session_cookies*.json
+cookis-*.json
+hmac.key
+*.p12
+*.pfx
+
+# Resultado de la compilacion: se publica como Release, no como fuente
+build/
+dist/
+instalador/
+*.exe
+
+# Entornos y temporales de Python
+.venv*/
+__pycache__/
+*.py[cod]
+
+# Copias de trabajo: para eso esta la historia del repositorio
+respaldos/
+versiones/
+*.log

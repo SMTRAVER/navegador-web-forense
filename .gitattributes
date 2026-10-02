@@ -1,0 +1,13 @@
+* text=auto
+
+# Los scripts de Windows tienen que conservar los finales de linea CRLF: un
+# .bat con finales LF falla al ejecutarse.
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+*.iss text eol=crlf
+
+# El manifiesto de archivos de la herramienta se hashea tal cual: LF siempre.
+*.sha256 text eol=lf
+
+*.png binary
+*.ico binary
