@@ -69,6 +69,7 @@ echo.
     --onedir --windowed ^
     --icon=Navegador_Forense_Icon.ico ^
     --add-data "traverso_logo.png;." ^
+    --hidden-import uharfbuzz ^
     --add-data "verificar_caso.py;." ^
     --exclude-module tkinter --exclude-module matplotlib --exclude-module scipy ^
     --exclude-module pandas --exclude-module IPython --exclude-module pytest ^

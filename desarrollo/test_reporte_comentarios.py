@@ -119,6 +119,7 @@ pdf.add_page()
 entorno = {
     "self": Yo(), "pdf": pdf, "os": os, "re": re,
     "sanitize_text": app.sanitize_text, "XPos": app.XPos, "YPos": app.YPos,
+    "FUENTE_INFORME": app.FUENTE_INFORME, "FUENTE_MONO": app.FUENTE_MONO,
 }
 exec(seccion, entorno)
 

@@ -117,6 +117,8 @@ def anexo(conversor):
     exec(seccion, {"self": Yo(), "pdf": pdf, "os": os, "Image": Image,
                    "sanitize_text": app.sanitize_text,
                    "XPos": app.XPos, "YPos": app.YPos,
+                   "FUENTE_INFORME": app.FUENTE_INFORME,
+                   "FUENTE_MONO": app.FUENTE_MONO,
                    "imagen_para_informe": conversor,
                    "dir_temp": TMP, "temp_thumbs": temporales})
     destino = TMP / "anexo.pdf"
@@ -228,12 +230,21 @@ else:
         ok = False
 
     def registro(ancho, alto, nombre):
-        """Pesa una miniatura del registro corriendo pdf.miniatura de verdad."""
+        """
+        Lo que pesa una miniatura del registro, corriendo pdf.miniatura de
+        verdad.
+
+        Se descuenta lo que pesa el documento vacio. Desde que el informe
+        incrusta fuentes Unicode, cada PDF arrastra unos 60 KB de subconjunto
+        tipografico, y comparando documentos enteros ese peso fijo tapaba la
+        diferencia entre una miniatura y otra, que es lo que aca se mide.
+        """
         pdf = app.DictamenForense()
         pdf.add_page()
         temporales = []
-        pdf.miniatura(caps[0], "miniatura", max_w_mm=ancho, max_h_mm=alto,
-                      temp_dir=TMP, temporales=temporales)
+        if ancho:
+            pdf.miniatura(caps[0], "miniatura", max_w_mm=ancho, max_h_mm=alto,
+                          temp_dir=TMP, temporales=temporales)
         d = TMP / nombre
         pdf.output(str(d))
         for t in temporales:
@@ -243,8 +254,9 @@ else:
                 pass
         return d.stat().st_size / 1024.0
 
-    media_hoja = registro(140, 80, "reg_grande.pdf")
-    chica = registro(45, 32, "reg_chica.pdf")
+    vacio = registro(None, None, "reg_vacia.pdf")
+    media_hoja = registro(140, 80, "reg_grande.pdf") - vacio
+    chica = registro(45, 32, "reg_chica.pdf") - vacio
     print("  miniatura a media hoja %7.0f KB" % media_hoja)
     print("  miniatura chica        %7.0f KB   -%2.0f%%"
           % (chica, 100 * (1 - chica / media_hoja)))

@@ -22,6 +22,12 @@ def sanitize_text(t):
     return "".join(c for c in n if not unicodedata.combining(c)).encode("latin-1", "ignore").decode("latin-1")
 def get_self_hash():
     return "a" * 64
+# El dictamen ahora elige la fuente por estas variables. Aca se usan las del
+# propio PDF: lo que esta prueba mira es la maquetacion de la seccion.
+FUENTE_INFORME = "helvetica"
+FUENTE_MONO = "courier"
+def cargar_fuentes_unicode(pdf):
+    return False
 '''
 
 ini = src.index("class DictamenForense")

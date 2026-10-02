@@ -1249,30 +1249,134 @@ def restringir_a_usuario_actual(ruta) -> bool:
     except Exception:
         return False
 
+# Fuentes del dictamen. Arranca con las del propio PDF, que solo cubren el
+# alfabeto latino, y pasa a las Unicode cuando se logran cargar.
+FUENTE_INFORME = "helvetica"
+FUENTE_MONO = "courier"
+FUENTES_DEL_INFORME = "fuentes base del PDF (alfabeto latino solamente)"
+_FUENTES_EN_EL_EQUIPO = None
+
+# Las que hacen falta: Arial en sus cuatro variantes y Courier New para los
+# bloques de hash. Las trae cualquier Windows.
+_ARCHIVOS_DE_FUENTE = (("texto", "", "arial.ttf"), ("texto", "B", "arialbd.ttf"),
+                       ("texto", "I", "ariali.ttf"), ("texto", "BI", "arialbi.ttf"),
+                       ("mono", "", "cour.ttf"), ("mono", "B", "courbd.ttf"))
+
+
+def carpeta_de_fuentes() -> Path:
+    return Path(os.environ.get("WINDIR", r"C:\Windows")) / "Fonts"
+
+
+def hay_fuentes_unicode() -> bool:
+    """
+    Si el equipo tiene las fuentes con que se escribe el informe.
+
+    Se consulta una sola vez. No alcanza con preguntarselo al documento ya
+    creado: sanitize_text se usa antes y despues de armarlo, y si la respuesta
+    dependiera de eso el mismo texto saldria distinto segun el orden.
+    """
+    global _FUENTES_EN_EL_EQUIPO
+    if _FUENTES_EN_EL_EQUIPO is None:
+        carpeta = carpeta_de_fuentes()
+        _FUENTES_EN_EL_EQUIPO = all((carpeta / a).exists() for _, _, a in _ARCHIVOS_DE_FUENTE)
+    return _FUENTES_EN_EL_EQUIPO
+
+
+def cargar_fuentes_unicode(pdf) -> bool:
+    """
+    Incrusta en el informe fuentes que cubran cualquier alfabeto.
+
+    Hasta esta version el dictamen usaba las fuentes base del PDF, que solo
+    entienden latin-1, y antes de escribir pasaba todo por sanitize_text, que
+    borraba el resto. El efecto medido: "Munoz" en lugar de "Muñoz", y un
+    comentario en arabe, persa, ruso, hebreo, chino o japones quedaba en un
+    renglon vacio. La prueba estaba en el caso: se capturaron comentarios de
+    cuentas persas. El original nunca se perdio —el listado .txt va en UTF-8 y
+    la captura PNG muestra la pantalla— pero el dictamen, que es lo que lee el
+    juzgado, mutilaba la transcripcion.
+
+    Se usan las fuentes de Windows: Arial, que es metricamente igual a
+    Helvetica y por eso no mueve la maquetacion de las tablas, y Courier New
+    para los bloques de hash. Como respaldo, Microsoft YaHei para chino y
+    japones y Segoe UI Emoji. Las cuatro permiten incrustarse (fsType 8). Al
+    PDF entra solo el subconjunto de glifos que se usa.
+
+    Las lenguas que se escriben de derecha a izquierda necesitan ademas un
+    motor de composicion: sin el, el arabe sale sin ligar y al reves. Lo provee
+    uharfbuzz a traves de fpdf2.
+
+    Es lo que pide la afirmacion CDX-CA-06 de la especificacion del NIST para
+    herramientas de extraccion en la nube, tomada aca como referencia: "the
+    tool renders non-English text correctly".
+
+    Si en el equipo faltara alguna fuente, el informe sigue saliendo con las
+    de antes: feo para otros alfabetos, pero sale.
+    """
+    global FUENTE_INFORME, FUENTE_MONO, FUENTES_DEL_INFORME, _FUENTES_EN_EL_EQUIPO
+    carpeta = carpeta_de_fuentes()
+    try:
+        if not hay_fuentes_unicode():
+            raise FileNotFoundError("faltan fuentes en %s" % carpeta)
+        for familia, estilo, archivo in _ARCHIVOS_DE_FUENTE:
+            pdf.add_font(familia, estilo, str(carpeta / archivo))
+    except Exception as e:
+        _FUENTES_EN_EL_EQUIPO = False
+        registrar_fallo_critico(
+            "FUENTES",
+            f"El dictamen se genera sin fuentes Unicode ({e}): los textos que no sean "
+            f"del alfabeto latino no se van a transcribir")
+        return False
+
+    respaldos = []
+    for nombre, archivo in (("cjk", "msyh.ttc"), ("emoji", "seguiemj.ttf")):
+        try:
+            pdf.add_font(nombre, "", str(carpeta / archivo))
+            respaldos.append(nombre)
+        except Exception:
+            pass
+    if respaldos:
+        pdf.set_fallback_fonts(respaldos)
+    try:
+        pdf.set_text_shaping(True)
+        composicion = True
+    except Exception:
+        composicion = False
+
+    FUENTE_INFORME, FUENTE_MONO = "texto", "mono"
+    FUENTES_DEL_INFORME = (
+        "Arial y Courier New incrustadas"
+        + (", con respaldo de %s" % " y ".join(
+            {"cjk": "Microsoft YaHei (chino y japones)",
+             "emoji": "Segoe UI Emoji"}[r] for r in respaldos) if respaldos else "")
+        + (", y composicion de derecha a izquierda con HarfBuzz" if composicion
+           else "; sin motor de composicion: el arabe y el hebreo salen sin ligar"))
+    return True
+
+
 def sanitize_text(text: Any) -> str:
-    """Normaliza texto a latin-1 para compatibilidad con fpdf2.
-    Usa NFKD + encode/decode para descomponer diacr\u00edticos en un solo paso,
-    luego aplica sustituciones para s\u00edmbolos que no tienen equivalente latin-1.
+    """
+    Prepara un texto para el informe sin alterarlo.
+
+    Solo saca los caracteres de control, que romperian el PDF. Lo demas queda
+    como fue adquirido: una transcripcion que cambia el texto no sirve de
+    transcripcion. Ver cargar_fuentes_unicode.
+
+    Si no se pudieron cargar las fuentes Unicode se vuelve al comportamiento
+    anterior —pasar a latin-1 y descartar el resto— porque con las fuentes
+    base del PDF un caracter fuera de ese juego aborta la generacion, y es
+    preferible un informe con el texto degradado a no tener informe.
     """
     if not text:
         return "N/A"
-    text = str(text)
-    # Sustituciones para s\u00edmbolos sin equivalente latin-1 tras NFKD
-    _SUBS = {
-        "\u2014": "-", "\u2013": "-",
-        "\u2018": "'", "\u2019": "'",
-        "\u201C": '"', "\u201D": '"',
-        "\u2026": "...",
-        "\u00b0": "deg", "\u00ae": "(R)", "\u00a9": "(C)", "\u2122": "(TM)",
-    }
-    for orig, repl in _SUBS.items():
-        text = text.replace(orig, repl)
-    # NFKD descompone diacr\u00edticos (\u00e1 \u2192 a + \u0301) y encode latin-1 descarta combining chars
-    text = unicodedata.normalize("NFKD", text)
-    text = text.encode("latin-1", errors="ignore").decode("latin-1")
-    return text
+    t = str(text).replace("\r", " ")
+    t = "".join(c for c in t
+                if c in "\n\t" or unicodedata.category(c)[0] != "C")
+    if hay_fuentes_unicode():
+        return t
+    n = unicodedata.normalize("NFKD", t)
+    return "".join(c for c in n if not unicodedata.combining(c)) \
+        .encode("latin-1", "ignore").decode("latin-1")
 
-# GENERADORES DE MINIATURAS
 def is_valid_video(path: str) -> bool:
     try:
         if path.lower().endswith(".enc"):
@@ -4558,6 +4662,10 @@ _COM_FINAL_JS = r"""
 
 #  REPORTE PDF 
 class DictamenForense(FPDF):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        cargar_fuentes_unicode(self)
+
     C_VERDE = (46, 125, 50)
     C_VERDE_OS = (27, 94, 32)
     C_AZUL = (13, 71, 161)
@@ -4570,7 +4678,7 @@ class DictamenForense(FPDF):
     def header(self):
         if self.page_no() == 1:
             return
-        self.set_font("helvetica", "B", 8)
+        self.set_font(FUENTE_INFORME, "B", 8)
         self.set_fill_color(*self.C_VERDE_OS)
         self.set_text_color(255, 255, 255)
         self.cell(0, 6, self._s(f"  {SOFTWARE_INFO['software']} {SOFTWARE_INFO['version']}  -  {SOFTWARE_INFO['norma']}"),
@@ -4580,7 +4688,7 @@ class DictamenForense(FPDF):
 
     def footer(self):
         self.set_y(-13)
-        self.set_font("helvetica", "I", 7)
+        self.set_font(FUENTE_INFORME, "I", 7)
         self.set_text_color(120, 120, 120)
         self.cell(0, 5, self._s(f"Pagina {self.page_no()}"), align="C")
 
@@ -4596,18 +4704,18 @@ class DictamenForense(FPDF):
         else:
             self.set_fill_color(*self.C_VERDE)
             self.rect(14, logo_y, 42, 42, "F")
-            self.set_font("helvetica", "B", 28)
+            self.set_font(FUENTE_INFORME, "B", 28)
             self.set_text_color(255, 255, 255)
             self.set_xy(14, logo_y + 8)
             self.cell(42, 26, "T", align="C")
 
         self.set_xy(62, logo_y)
-        self.set_font("helvetica", "B", 18)
+        self.set_font(FUENTE_INFORME, "B", 18)
         self.set_text_color(*self.C_VERDE_OS)
         w_right = self.w - self.r_margin - 62
         self.multi_cell(w_right, 10, self._s(SOFTWARE_INFO['software']), align="L", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         self.set_x(62)
-        self.set_font("helvetica", "", 10)
+        self.set_font(FUENTE_INFORME, "", 10)
         self.set_text_color(60, 60, 60)
         self.cell(0, 6, "Reporte Forense Certificado de Navegacion Web", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         self.set_x(62)
@@ -4616,13 +4724,13 @@ class DictamenForense(FPDF):
         self.cell(0, 6, self._s(f"Generacion: {ts_gen}"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         # Autor del software (siempre fijo: independiente del perito actuante)
         self.set_x(62)
-        self.set_font("helvetica", "B", 9)
+        self.set_font(FUENTE_INFORME, "B", 9)
         self.set_text_color(*self.C_VERDE_OS)
         self.cell(0, 6, self._s(
             f"Desarrollado por: Miguel Angel A. TRAVERSO ({AUTOR_SISTEMA['titulo']})"
         ), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         self.set_x(62)
-        self.set_font("helvetica", "I", 8)
+        self.set_font(FUENTE_INFORME, "I", 8)
         self.set_text_color(80, 80, 80)
         self.multi_cell(w_right, 5, self._s(
             f"{AUTOR_SISTEMA['empresa']} | {AUTOR_SISTEMA['email']} | {AUTOR_SISTEMA['linkedin']}\n"
@@ -4632,7 +4740,7 @@ class DictamenForense(FPDF):
         self.set_y(100)
         self.set_fill_color(*self.C_VERDE)
         self.set_text_color(255, 255, 255)
-        self.set_font("helvetica", "B", 10)
+        self.set_font(FUENTE_INFORME, "B", 10)
         self.cell(0, 8, "   DATOS DEL CASO PERICIAL", fill=True, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         self.set_text_color(0, 0, 0)
         filas = [
@@ -4652,10 +4760,10 @@ class DictamenForense(FPDF):
             w_value = max(page_w - w_label, 30)
             y0 = self.get_y()
             self.set_fill_color(*(self.C_FILA_PAR if i % 2 == 0 else self.C_FILA_IMP))
-            self.set_font("helvetica", "B", 9)
+            self.set_font(FUENTE_INFORME, "B", 9)
             self.set_xy(self.l_margin, y0)
             self.multi_cell(w_label, 6, self._s(f"  {k}"), fill=True, border=1, new_x=XPos.RIGHT, new_y=YPos.TOP)
-            self.set_font("helvetica", "", 9)
+            self.set_font(FUENTE_INFORME, "", 9)
             self.set_xy(self.l_margin + w_label, y0)
             self.multi_cell(w_value, 6, self._s(f"  {v}"), fill=True, border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             y_after = self.get_y()
@@ -4665,7 +4773,7 @@ class DictamenForense(FPDF):
         self.ln(4)
         self.set_fill_color(*self.C_VERDE)
         self.set_text_color(255, 255, 255)
-        self.set_font("helvetica", "B", 10)
+        self.set_font(FUENTE_INFORME, "B", 10)
         self.cell(0, 8, self._s(f"  [{tag}]  {title.upper()}"), fill=True, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         self.set_text_color(0, 0, 0)
         self.ln(2)
@@ -4684,7 +4792,7 @@ class DictamenForense(FPDF):
         # seguida de un fragmento suelto, que fue lo que apareció al final del
         # anexo de verificacion.
         def _lineas(texto, ancho, negrita):
-            self.set_font("helvetica", "B" if negrita else "", 9)
+            self.set_font(FUENTE_INFORME, "B" if negrita else "", 9)
             try:
                 return len(self.multi_cell(ancho, 6, texto, dry_run=True,
                                            output="LINES", border=1))
@@ -4710,18 +4818,18 @@ class DictamenForense(FPDF):
 
         y_before = self.get_y()
         self.set_fill_color(*(self.C_FILA_PAR if idx % 2 == 0 else self.C_FILA_IMP))
-        self.set_font("helvetica", "B", 9)
+        self.set_font(FUENTE_INFORME, "B", 9)
         self.set_xy(self.l_margin, y_before)
         self.multi_cell(w_label, 6, etiqueta, fill=True, border=1, new_x=XPos.RIGHT, new_y=YPos.TOP)
         y_after_label = self.get_y()
-        self.set_font("helvetica", "", 9)
+        self.set_font(FUENTE_INFORME, "", 9)
         self.set_xy(self.l_margin + w_label, y_before)
         self.multi_cell(w_value, 6, valor, fill=True, border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         y_after_value = self.get_y()
         self.set_y(max(y_after_label, y_after_value))
 
     def cuerpo_texto(self, texto: str, size: int = 9):
-        self.set_font("helvetica", "", size)
+        self.set_font(FUENTE_INFORME, "", size)
         self.set_text_color(40, 40, 40)
         w_full = self.w - self.l_margin - self.r_margin
         self.set_x(self.l_margin)
@@ -4729,13 +4837,13 @@ class DictamenForense(FPDF):
         self.ln(1)
 
     def bloque_hash(self, label: str, valor: str):
-        self.set_font("helvetica", "B", 8)
+        self.set_font(FUENTE_INFORME, "B", 8)
         self.set_text_color(40, 40, 40)
         self.cell(0, 5, self._s(label), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         self.set_fill_color(245, 245, 245)
         self.set_draw_color(*self.C_VERDE_OS)
         self.set_line_width(0.4)
-        self.set_font("courier", "", 7)
+        self.set_font(FUENTE_MONO, "", 7)
         self.set_text_color(*self.C_VERDE_OS)
         w_full = self.w - self.l_margin - self.r_margin
         self.set_x(self.l_margin)
@@ -4769,7 +4877,7 @@ class DictamenForense(FPDF):
             x_center = (self.w - self.l_margin - self.r_margin - w_mm) / 2 + self.l_margin
             self.image(a_insertar, x=x_center, w=w_mm)
             if caption:
-                self.set_font("helvetica", "I", 7)
+                self.set_font(FUENTE_INFORME, "I", 7)
                 self.set_text_color(100, 100, 100)
                 self.cell(0, 5, self._s(caption), align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
                 self.set_text_color(0, 0, 0)
@@ -4781,7 +4889,7 @@ class DictamenForense(FPDF):
         self.set_fill_color(245, 245, 245)
         self.set_draw_color(180, 180, 180)
         self.set_line_width(0.3)
-        self.set_font("helvetica", "I", 8)
+        self.set_font(FUENTE_INFORME, "I", 8)
         self.set_text_color(120, 120, 120)
         w_box = 80
         h_box = 30
@@ -9621,7 +9729,7 @@ class TraversoWebForensicsPro(QMainWindow):
 
         # Nota de autor del sistema
         pdf.ln(3)
-        pdf.set_font("helvetica", "I", 8)
+        pdf.set_font(FUENTE_INFORME, "I", 8)
         pdf.set_text_color(100, 100, 100)
         pdf.cuerpo_texto(
             f"NOTA: El presente software fue desarrollado por {AUTOR_SISTEMA['nombre']} "
@@ -9673,7 +9781,7 @@ class TraversoWebForensicsPro(QMainWindow):
                 usr_label  = sanitize_text(perf.get("profile_id", ""))
                 pdf.set_fill_color(13, 71, 161)
                 pdf.set_text_color(255, 255, 255)
-                pdf.set_font("helvetica", "B", 9)
+                pdf.set_font(FUENTE_INFORME, "B", 9)
                 pdf.cell(
                     0, 7,
                     sanitize_text(f"  Perfil {idx_p + 1}  |  {plat_label}  |  @{usr_label}"),
@@ -9700,7 +9808,7 @@ class TraversoWebForensicsPro(QMainWindow):
                 ficha_p = perf.get("ficha_path", "")
                 if ficha_p and os.path.exists(ficha_p):
                     pdf.ln(2)
-                    pdf.set_font("helvetica", "B", 8)
+                    pdf.set_font(FUENTE_INFORME, "B", 8)
                     pdf.set_text_color(13, 71, 161)
                     pdf.cell(0, 5, sanitize_text("  Ficha de datos capturados:"),
                              new_x=XPos.LMARGIN, new_y=YPos.NEXT)
@@ -9739,7 +9847,7 @@ class TraversoWebForensicsPro(QMainWindow):
 
                 if cap_asociada:
                     pdf.ln(2)
-                    pdf.set_font("helvetica", "B", 8)
+                    pdf.set_font(FUENTE_INFORME, "B", 8)
                     pdf.set_text_color(46, 125, 50)
                     pdf.cell(0, 5,
                              sanitize_text(f"  Captura de pantalla asociada: {cap_asociada['filename']}"),
@@ -9768,13 +9876,13 @@ class TraversoWebForensicsPro(QMainWindow):
                 pdf.add_page()
 
             pdf.set_fill_color(232, 245, 233)
-            pdf.set_font("helvetica", "B", 9)
+            pdf.set_font(FUENTE_INFORME, "B", 9)
             pdf.cell(0, 6, sanitize_text(f"  Evidencia {i+1} | {ev['tipo']} | {ev['ts']}"), fill=True, border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-            pdf.set_font("helvetica", "", 8)
+            pdf.set_font(FUENTE_INFORME, "", 8)
             pdf.cell(0, 5, sanitize_text(f"  Archivo: {ev['filename']} | {ev['size_bytes']/1024:.1f} KB"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             pdf.bloque_hash("  Hash SHA-256:", ev['sha256'])
             if ev.get('source_url'):
-                pdf.set_font("helvetica", "I", 7)
+                pdf.set_font(FUENTE_INFORME, "I", 7)
                 pdf.cell(0, 4, sanitize_text(f"  URL origen: {ev['source_url'][:100]}"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
             thumb_path = None
@@ -9823,12 +9931,12 @@ class TraversoWebForensicsPro(QMainWindow):
             elif ext in HTML_EXTS and os.path.exists(ev_path):
                 # Página web archivada (HTML/MHTML): no genera miniatura de imagen,
                 # pero se certifica el código fuente completo preservado.
-                pdf.set_font("helvetica", "B", 8)
+                pdf.set_font(FUENTE_INFORME, "B", 8)
                 pdf.set_text_color(13, 71, 161)
                 pdf.cell(0, 5, sanitize_text(
                     "  Pagina web archivada (HTML/MHTML) — codigo fuente completo preservado"),
                     new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-                pdf.set_font("helvetica", "I", 7)
+                pdf.set_font(FUENTE_INFORME, "I", 7)
                 pdf.set_text_color(90, 90, 90)
                 pdf.cell(0, 4, sanitize_text(
                     "  Apertura: navegador web (Chrome/Edge). Contenido, estructura y recursos "
@@ -9890,7 +9998,7 @@ class TraversoWebForensicsPro(QMainWindow):
                 # Se consigna la autoridad que emitio el sello: con la cascada
                 # puede no ser la primera de la lista, y el tribunal debe saber
                 # quien certifico la fecha.
-                pdf.set_font("helvetica", "I", 7)
+                pdf.set_font(FUENTE_INFORME, "I", 7)
                 pdf.set_text_color(46, 125, 50)
                 _aut = tsa_info.get('tsa_nombre') or tsa_info.get('tsa_url', '')
                 _verif = ", firma verificada" if tsa_info.get("verificado") else ""
@@ -9900,7 +10008,7 @@ class TraversoWebForensicsPro(QMainWindow):
                     new_x=XPos.LMARGIN, new_y=YPos.NEXT)
                 pdf.set_text_color(0, 0, 0)
             elif tsa_info and ('warning' in tsa_info or 'error' in tsa_info):
-                pdf.set_font("helvetica", "I", 7)
+                pdf.set_font(FUENTE_INFORME, "I", 7)
                 pdf.set_text_color(180, 100, 0)
                 _msg = tsa_info.get('warning') or tsa_info.get('error', '')
                 pdf.cell(0, 4, sanitize_text(f"  ⚠ Sin sello de tiempo: {_msg}"),
@@ -9944,7 +10052,7 @@ class TraversoWebForensicsPro(QMainWindow):
                     color, etiqueta = (180, 100, 0), res
                 pdf.set_fill_color(*color)
                 pdf.set_text_color(255, 255, 255)
-                pdf.set_font("helvetica", "B", 9)
+                pdf.set_font(FUENTE_INFORME, "B", 9)
                 pdf.cell(0, 7, sanitize_text(
                     f"  Verificacion {idx_v + 1}  |  {ver.get('dominio','')}  |  {etiqueta}"),
                     fill=True, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
@@ -9968,7 +10076,7 @@ class TraversoWebForensicsPro(QMainWindow):
             pdf.ln(2)
             pdf.set_fill_color(13, 71, 161)
             pdf.set_text_color(255, 255, 255)
-            pdf.set_font("helvetica", "B", 9)
+            pdf.set_font(FUENTE_INFORME, "B", 9)
             pdf.cell(0, 7, sanitize_text("  ORIGEN DE LA METODOLOGIA APLICADA"),
                      fill=True, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             pdf.set_text_color(0, 0, 0)
@@ -10028,7 +10136,7 @@ class TraversoWebForensicsPro(QMainWindow):
             for idx, r in enumerate(resumenes):
                 pdf.set_fill_color(13, 71, 161)
                 pdf.set_text_color(255, 255, 255)
-                pdf.set_font("helvetica", "B", 9)
+                pdf.set_font(FUENTE_INFORME, "B", 9)
                 pdf.cell(0, 7, sanitize_text(f"  RECORRIDO {idx + 1}: {r['tipo'].upper()}"),
                          fill=True, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
                 pdf.set_text_color(0, 0, 0)
@@ -10115,7 +10223,7 @@ class TraversoWebForensicsPro(QMainWindow):
 
             pdf.set_fill_color(13, 71, 161)
             pdf.set_text_color(255, 255, 255)
-            pdf.set_font("helvetica", "B", 9)
+            pdf.set_font(FUENTE_INFORME, "B", 9)
             pdf.cell(0, 7, sanitize_text("  ARCHIVOS INCORPORADOS"),
                      fill=True, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             pdf.set_text_color(0, 0, 0)
@@ -10145,6 +10253,13 @@ class TraversoWebForensicsPro(QMainWindow):
         _codecs = (getattr(self, "_render_info", None) or {}).get("codecs")
         configuracion = [
             ("Motor", version_motor()),
+            ("Transcripcion de texto",
+             "El informe incrusta fuentes Unicode (" + FUENTES_DEL_INFORME + "), de modo que "
+             "los textos adquiridos se transcriben tal como estan: tildes y eñes, alfabetos no "
+             "latinos (cirilico, griego, hebreo, arabe, chino, kana) y emojis. Antes el informe "
+             "usaba las fuentes base del PDF, que solo cubren el alfabeto latino, y lo demas se "
+             "perdia. Es lo que exige la afirmacion CDX-CA-06 de la especificacion del NIST para "
+             "herramientas de extraccion en la nube (CFTT), tomada aqui como referencia."),
             ("Reproduccion de video",
              "El motor no incluye los codecs H.264 y AAC, que son los que usan WhatsApp e "
              "Instagram, porque no vienen compilados en la version abierta de Qt WebEngine. En "
@@ -10200,7 +10315,7 @@ class TraversoWebForensicsPro(QMainWindow):
             )
             pdf.ln(2)
             # Encabezado de tabla
-            pdf.set_font("helvetica", "B", 7)
+            pdf.set_font(FUENTE_INFORME, "B", 7)
             pdf.set_fill_color(46, 125, 50)
             pdf.set_text_color(255, 255, 255)
             pdf.cell(28, 5, "  Timestamp", fill=True, border=1)
@@ -10218,7 +10333,7 @@ class TraversoWebForensicsPro(QMainWindow):
                 meth  = req.get("method", "GET")[:6]
                 fill  = idx_h % 2 == 0
                 pdf.set_fill_color(*(232, 245, 233) if fill else (255, 255, 255))
-                pdf.set_font("helvetica", "", 6)
+                pdf.set_font(FUENTE_INFORME, "", 6)
                 pdf.cell(28, 4, sanitize_text(f"  {ts_h}"), fill=fill, border=1)
                 pdf.cell(12, 4, sanitize_text(meth), fill=fill, border=1)
                 pdf.cell(0,  4, sanitize_text(f"  {url_h[:110]}"), fill=fill, border=1,
@@ -10226,7 +10341,7 @@ class TraversoWebForensicsPro(QMainWindow):
                 if pdf.get_y() > 270:
                     pdf.add_page()
             if len(self.case.har_entries) > 200:
-                pdf.set_font("helvetica", "I", 7)
+                pdf.set_font(FUENTE_INFORME, "I", 7)
                 pdf.set_text_color(120, 120, 120)
                 pdf.cell(0, 4,
                     sanitize_text(f"  ... y {len(self.case.har_entries) - 200} requests adicionales en el archivo HAR."),
@@ -10257,7 +10372,7 @@ class TraversoWebForensicsPro(QMainWindow):
                     ("HTTP Status",   str(meta_s.get("http_status", "N/A"))),
                     ("Timestamp",     meta_s.get("ts", "N/A")[:19]),
                 ]
-                pdf.set_font("helvetica", "B", 8)
+                pdf.set_font(FUENTE_INFORME, "B", 8)
                 pdf.set_fill_color(13, 71, 161)
                 pdf.set_text_color(255, 255, 255)
                 pdf.cell(0, 5, sanitize_text(f"  Sitio {idx_s+1}: {meta_s.get('host','?')}"),
@@ -10333,14 +10448,14 @@ class TraversoWebForensicsPro(QMainWindow):
                                sanitize_text(f.get("mensaje", "")), idx_f, w_label=42)
             if len(FALLOS_CRITICOS) > 40:
                 pdf.ln(1)
-                pdf.set_font("helvetica", "I", 8)
+                pdf.set_font(FUENTE_INFORME, "I", 8)
                 pdf.cell(0, 5, sanitize_text(
                     f"  (se listan las primeras 40 de {len(FALLOS_CRITICOS)} incidencias; "
                     "el detalle completo esta en el log de auditoria)"),
                     new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         else:
             pdf.ln(3)
-            pdf.set_font("helvetica", "B", 9)
+            pdf.set_font(FUENTE_INFORME, "B", 9)
             pdf.set_text_color(27, 94, 32)
             pdf.cell(0, 6, sanitize_text(
                 "  Sin incidencias: no se registraron fallos de integridad ni de "
@@ -10350,7 +10465,7 @@ class TraversoWebForensicsPro(QMainWindow):
 
         pdf.add_page()
         pdf.section_title("8", "CERTIFICADO DE INTEGRIDAD FORENSE")
-        pdf.set_font("helvetica", "", 10)
+        pdf.set_font(FUENTE_INFORME, "", 10)
         w_cert = pdf.w - pdf.l_margin - pdf.r_margin
         pdf.set_x(pdf.l_margin)
         pdf.multi_cell(w_cert, 6, sanitize_text(
@@ -10380,11 +10495,11 @@ class TraversoWebForensicsPro(QMainWindow):
             pdf.ln(8)
             pdf.set_fill_color(13, 71, 161)       # azul oscuro
             pdf.set_text_color(255, 255, 255)
-            pdf.set_font("helvetica", "B", 10)
+            pdf.set_font(FUENTE_INFORME, "B", 10)
             pdf.cell(0, 8, "   PAQUETE DE EVIDENCIA DIGITAL CERTIFICADO",
                      fill=True, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             pdf.set_text_color(0, 0, 0)
-            pdf.set_font("helvetica", "", 9)
+            pdf.set_font(FUENTE_INFORME, "", 9)
             w_full = pdf.w - pdf.l_margin - pdf.r_margin
             pdf.set_x(pdf.l_margin)
             pdf.multi_cell(w_full, 5, sanitize_text(
@@ -10406,7 +10521,7 @@ class TraversoWebForensicsPro(QMainWindow):
                 f"el paquete se vuelva a comprimir."
             ), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             pdf.ln(3)
-            pdf.set_font("helvetica", "I", 8)
+            pdf.set_font(FUENTE_INFORME, "I", 8)
             pdf.set_text_color(60, 60, 60)
             pdf.multi_cell(w_full, 4, sanitize_text(
                 f"  Verificacion del paquete:  certutil -hashfile \"{zip_info['nombre']}\" "
@@ -10450,7 +10565,7 @@ class TraversoWebForensicsPro(QMainWindow):
                 pdf.ln(2)
                 pdf.set_fill_color(13, 71, 161)
                 pdf.set_text_color(255, 255, 255)
-                pdf.set_font("helvetica", "B", 9)
+                pdf.set_font(FUENTE_INFORME, "B", 9)
                 pdf.cell(0, 7, sanitize_text(f"  {ev['filename']}   ({len(cuentas)} cuentas)"),
                          fill=True, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
                 pdf.set_text_color(0, 0, 0)
@@ -10471,7 +10586,7 @@ class TraversoWebForensicsPro(QMainWindow):
                     con_nombre = any(n for _, n in cuentas)
                     cols = 2 if con_nombre else 3
                     corte = 46 if con_nombre else 26
-                    pdf.set_font("courier", "", 7)
+                    pdf.set_font(FUENTE_MONO, "", 7)
                     ancho = (pdf.w - pdf.l_margin - pdf.r_margin) / cols
                     for k in range(0, len(cuentas), cols):
                         if pdf.get_y() > pdf.h - 25:
@@ -10480,16 +10595,16 @@ class TraversoWebForensicsPro(QMainWindow):
                             txt = f"{nombre} (@{ident})" if nombre else f"@{ident}"
                             pdf.cell(ancho, 4, sanitize_text("  " + txt[:corte]))
                         pdf.ln(4)
-                    pdf.set_font("helvetica", "", 9)
+                    pdf.set_font(FUENTE_INFORME, "", 9)
                     pdf.ln(2)
-                    pdf.set_font("helvetica", "I", 7)
+                    pdf.set_font(FUENTE_INFORME, "I", 7)
                     pdf.set_text_color(90, 90, 90)
                     pdf.cell(0, 4, sanitize_text(
                         f"  Total transcripto: {len(cuentas)} cuentas.   "
                         f"SHA-256 del listado: {ev.get('sha256', '')[:32]}..."),
                         new_x=XPos.LMARGIN, new_y=YPos.NEXT)
                     pdf.set_text_color(0, 0, 0)
-                    pdf.set_font("helvetica", "", 9)
+                    pdf.set_font(FUENTE_INFORME, "", 9)
 
         # SECCION: COMENTARIOS DE PUBLICACIONES
         #
@@ -10555,7 +10670,7 @@ class TraversoWebForensicsPro(QMainWindow):
                 pdf.ln(2)
                 pdf.set_fill_color(13, 71, 161)
                 pdf.set_text_color(255, 255, 255)
-                pdf.set_font("helvetica", "B", 9)
+                pdf.set_font(FUENTE_INFORME, "B", 9)
                 pdf.cell(0, 7, sanitize_text(
                     f"  {ev['filename']}   ({len(filas)} comentarios)"),
                     fill=True, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
@@ -10570,10 +10685,10 @@ class TraversoWebForensicsPro(QMainWindow):
                             fi += 1
                 if desc:
                     pdf.ln(1)
-                    pdf.set_font("helvetica", "B", 8)
+                    pdf.set_font(FUENTE_INFORME, "B", 8)
                     pdf.cell(0, 5, sanitize_text("  Descripcion de la publicacion"),
                              new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-                    pdf.set_font("helvetica", "", 9)
+                    pdf.set_font(FUENTE_INFORME, "", 9)
                     for linea in desc:
                         k, v = linea.split(":", 1)
                         pdf.tabla_fila(k.strip(), sanitize_text(v.strip()), fi, w_label=32)
@@ -10585,13 +10700,13 @@ class TraversoWebForensicsPro(QMainWindow):
                     w_n, w_aut, w_fec = 10, 40, 42
                     w_txt = ancho_tot - w_n - w_aut - w_fec
                     def _encabezado_tabla():
-                        pdf.set_font("helvetica", "B", 7)
+                        pdf.set_font(FUENTE_INFORME, "B", 7)
                         pdf.set_fill_color(220, 230, 241)
                         for etq, an in (("N", w_n), ("Autor", w_aut),
                                         ("Fecha publicada", w_fec), ("Comentario", w_txt)):
                             pdf.cell(an, 5, sanitize_text(" " + etq), border=1, fill=True)
                         pdf.ln(5)
-                        pdf.set_font("helvetica", "", 7)
+                        pdf.set_font(FUENTE_INFORME, "", 7)
 
                     _encabezado_tabla()
                     for k, (num, autor, fecha, texto) in enumerate(filas):
@@ -10645,14 +10760,14 @@ class TraversoWebForensicsPro(QMainWindow):
                         pdf.multi_cell(w_txt - 2, 4, txt, border=0, align="L", fill=False)
                         pdf.set_y(y0 + alto)
                     pdf.ln(2)
-                    pdf.set_font("helvetica", "I", 7)
+                    pdf.set_font(FUENTE_INFORME, "I", 7)
                     pdf.set_text_color(90, 90, 90)
                     pdf.multi_cell(0, 4, sanitize_text(
                         f"  Total transcripto: {len(filas)} comentarios.   "
                         f"SHA-256 del listado: {ev.get('sha256', '')[:32]}..."),
                         new_x=XPos.LMARGIN, new_y=YPos.NEXT)
                     pdf.set_text_color(0, 0, 0)
-                    pdf.set_font("helvetica", "", 9)
+                    pdf.set_font(FUENTE_INFORME, "", 9)
 
         # ANEXO: VISTAS DEL CHAT
         #
@@ -10739,17 +10854,17 @@ class TraversoWebForensicsPro(QMainWindow):
                                   w=w_mm, h=h_mm)
                     except Exception:
                         pdf.set_xy(x, y_fila)
-                        pdf.set_font("helvetica", "I", 7)
+                        pdf.set_font(FUENTE_INFORME, "I", 7)
                         pdf.cell(col_w, ALTO_IMG, "imagen no disponible", align="C")
 
                     pdf.set_xy(x, y_fila + ALTO_IMG + 1)
-                    pdf.set_font("helvetica", "B", 6)
+                    pdf.set_font(FUENTE_INFORME, "B", 6)
                     pdf.set_text_color(46, 125, 50)
                     pdf.cell(col_w, 3, sanitize_text(
                         f"VISTA {idx + 1} de {len(chats)}   {ev.get('filename', '')}"),
                         new_x=XPos.LEFT, new_y=YPos.NEXT)
                     pdf.set_x(x)
-                    pdf.set_font("helvetica", "", 5)
+                    pdf.set_font(FUENTE_INFORME, "", 5)
                     pdf.set_text_color(110, 110, 110)
                     pdf.cell(col_w, 3, sanitize_text(
                         f"{ev.get('ts', '')[:19].replace('T', ' ')}   "
@@ -10780,7 +10895,7 @@ class TraversoWebForensicsPro(QMainWindow):
         # 1. Verificacion del caso
         pdf.set_fill_color(13, 71, 161)
         pdf.set_text_color(255, 255, 255)
-        pdf.set_font("helvetica", "B", 9)
+        pdf.set_font(FUENTE_INFORME, "B", 9)
         pdf.cell(0, 7, sanitize_text("  1. COMO VERIFICAR ESTE CASO"),
                  fill=True, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.set_text_color(0, 0, 0)
@@ -10826,7 +10941,7 @@ class TraversoWebForensicsPro(QMainWindow):
         # 2. Verificacion de la herramienta
         pdf.set_fill_color(13, 71, 161)
         pdf.set_text_color(255, 255, 255)
-        pdf.set_font("helvetica", "B", 9)
+        pdf.set_font(FUENTE_INFORME, "B", 9)
         pdf.cell(0, 7, sanitize_text("  2. COMO VERIFICAR LA HERRAMIENTA"),
                  fill=True, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.set_text_color(0, 0, 0)
@@ -10865,7 +10980,7 @@ class TraversoWebForensicsPro(QMainWindow):
         pdf.add_page()
         pdf.set_fill_color(13, 71, 161)
         pdf.set_text_color(255, 255, 255)
-        pdf.set_font("helvetica", "B", 9)
+        pdf.set_font(FUENTE_INFORME, "B", 9)
         pdf.cell(0, 7, sanitize_text("  3. CORRESPONDENCIA CON LA NORMA ISO/IEC 27037"),
                  fill=True, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.set_text_color(0, 0, 0)
@@ -10926,7 +11041,7 @@ class TraversoWebForensicsPro(QMainWindow):
         # 4. Capacidades
         pdf.set_fill_color(13, 71, 161)
         pdf.set_text_color(255, 255, 255)
-        pdf.set_font("helvetica", "B", 9)
+        pdf.set_font(FUENTE_INFORME, "B", 9)
         pdf.cell(0, 7, sanitize_text("  4. CAPACIDADES RESPECTO DE HERRAMIENTAS COMERCIALES"),
                  fill=True, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.set_text_color(0, 0, 0)
@@ -11002,15 +11117,15 @@ class TraversoWebForensicsPro(QMainWindow):
         pdf.set_line_width(0.5)
         pdf.line(60, y_linea, 150, y_linea)
         pdf.ln(3)
-        pdf.set_font("helvetica", "B", 11)
+        pdf.set_font(FUENTE_INFORME, "B", 11)
         pdf.set_text_color(0, 0, 0)
         pdf.cell(0, 7, "FIRMA", align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        pdf.set_font("helvetica", "", 10)
+        pdf.set_font(FUENTE_INFORME, "", 10)
         pdf.cell(0, 6, sanitize_text(self.perito_data.get('nombre', '')), align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        pdf.set_font("helvetica", "I", 9)
+        pdf.set_font(FUENTE_INFORME, "I", 9)
         pdf.cell(0, 5, sanitize_text(self.perito_data.get('titulo', '')), align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         if self.perito_data.get('matricula'):
-            pdf.set_font("helvetica", "I", 8)
+            pdf.set_font(FUENTE_INFORME, "I", 8)
             pdf.set_text_color(80, 80, 80)
             pdf.cell(0, 5, sanitize_text(f"Matricula: {self.perito_data['matricula']}"), align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
