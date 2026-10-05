@@ -706,7 +706,7 @@ def write_custody_sidecar(path: str, tipo: str, source_url: str,
         "",
         "  ── INTEGRIDAD ──────────────────────────────────────────────",
         f"  SHA-256            : {sha}",
-        f"  ALGORITMO          : SHA-256 (FIPS 180-4)",
+        "  ALGORITMO          : SHA-256 (FIPS 180-4)",
         f"  MOMENTO DEL HASH   : {ts_legible}  [{ts_iso}]",
         "",
         "  ── ORIGEN ──────────────────────────────────────────────────",
@@ -767,6 +767,7 @@ def get_ntp_info() -> Dict[str, Any]:
     impugnable toda la línea de tiempo forense.
     Retorna dict con resultado o error si no hay red.
     """
+    motivo = "ntplib no instalado"
     if _HAS_NTPLIB:
         try:
             c = _ntplib.NTPClient()
@@ -783,15 +784,16 @@ def get_ntp_info() -> Dict[str, Any]:
                 "alerta":         abs(offset_s) > 30,   # >30s es problemático en forense
             }
         except Exception as e:
-            pass
+            motivo = f"{type(e).__name__}: {e}"
     # Fallback sin ntplib o sin red
     return {
         "servidor":       "pool.ntp.org",
         "hora_local":     datetime.datetime.now().isoformat(),
         "offset_segundos": None,
         "sincronizado":   False,
-        "error":          "ntplib no instalado o sin acceso a red. "
-                          "Instalar: pip install ntplib",
+        "error":          "no se pudo consultar la hora por NTP (%s). "
+                          "La referencia de tiempo es la hora firmada por la "
+                          "autoridad de sellado." % motivo,
     }
 
 # METADATOS DE SITIO WEB
@@ -979,7 +981,7 @@ def guardar_cabeceras(case, meta: Dict[str, Any]) -> bool:
     destino = case.dirs["network"] / f"Headers_{host}.txt"
     try:
         with open(destino, "w", encoding="utf-8") as f:
-            f.write(f"CABECERAS HTTP DEL SERVIDOR\n")
+            f.write("CABECERAS HTTP DEL SERVIDOR\n")
             f.write(f"Host        : {host}\n")
             f.write(f"URL         : {meta.get('url', '')}\n")
             f.write(f"URL final   : {meta.get('final_url', '')}\n")
@@ -2778,7 +2780,6 @@ class MediaAcquisition(QThread):
     def run(self):
         import requests as _req
         url       = self.url
-        url_lower = url.lower()
         ts        = self.ts
 
         default_headers = {
@@ -4862,7 +4863,6 @@ class DictamenForense(FPDF):
                 iw, ih = im.size
                 ratio = min(max_w_mm / iw, max_h_mm / ih)
                 w_mm = iw * ratio
-                h_mm = ih * ratio
 
             # Se inserta una copia al tamaño que se va a ver. Ver
             # imagen_para_informe: embeber el original entero era el 99% del
@@ -6229,14 +6229,12 @@ class TraversoWebForensicsPro(QMainWindow):
         domain = parsed.netloc.replace("www.", "")[:22]
         fname  = parsed.path.split("/")[-1][:32] or parsed.path[-22:]
         n      = len(self.detected_media_urls)
-        combo_idx = self.combo_media.count() if self.combo_media.isEnabled() else 0
 
         # Etiqueta inicial con tamaño pendiente
         label = f"{icon} [{n:02d}] {media_type:<11}  ⏳ sondeando...   {domain}  —  {fname}"
 
         if self.combo_media.count() == 1 and not self.combo_media.isEnabled():
             self.combo_media.clear()
-            combo_idx = 0
 
         self.combo_media.addItem(label, url)
         self.combo_media.setCurrentIndex(self.combo_media.count() - 1)
@@ -7115,7 +7113,7 @@ class TraversoWebForensicsPro(QMainWindow):
         ts_decl   = origen_data.get("ts", datetime.datetime.now().isoformat())
         sep = "─" * 60
         self.append_console(sep)
-        self.append_console(f"  DECLARACION DE ORIGEN DE COOKIES DE AUTENTICACION")
+        self.append_console("  DECLARACION DE ORIGEN DE COOKIES DE AUTENTICACION")
         self.append_console(sep)
         self.append_console(f"  Plataforma : {plat or 'No especificada'}")
         self.append_console(f"  Origen     : {origen}")
@@ -8880,7 +8878,7 @@ class TraversoWebForensicsPro(QMainWindow):
             try:
                 self.browser.page().download(QUrl(foto), str(
                     self.case.dirs["evidence_img"] / nombre))
-                self.append_console(f"   Foto de perfil    : descargando en resolucion completa")
+                self.append_console("   Foto de perfil    : descargando en resolucion completa")
             except Exception as e:
                 self._pagina_pendiente = None
                 self.append_console(f"   x No se pudo descargar la foto: {e}")
@@ -9577,7 +9575,7 @@ class TraversoWebForensicsPro(QMainWindow):
                     extra      = extra,
                 )
                 size_kb = sid["size"] / 1024
-                ev = self.case.register_evidence(tipo_ev, dest_path)
+                self.case.register_evidence(tipo_ev, dest_path)
                 if es_pagina:
                     self.case.log("INFO", "ACREDITACION",
                         f"{tipo_ev} | {dest_name} | {size_kb:.1f} KB | "
@@ -11488,7 +11486,7 @@ class TraversoWebForensicsPro(QMainWindow):
                 except Exception as _e:
                     # Los archivos siguen abiertos hasta que el proceso termina
                     self.append_console(
-                        f"  AVISO: no se pudo borrar el perfil de navegacion.")
+                        "  AVISO: no se pudo borrar el perfil de navegacion.")
                     self.append_console(f"     Contiene credenciales de sesion: {_perfil}")
                     self.case.log("ADVERTENCIA", "CIERRE",
                                   f"No se pudo eliminar el perfil de navegacion ({_e}). "

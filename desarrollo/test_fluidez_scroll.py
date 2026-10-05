@@ -18,7 +18,6 @@ Un cuadro por encima de 33 ms se ve como un tiron.
 """
 import os
 import sys
-import time
 
 os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS",
                       "--enable-features=SharedArrayBuffer "

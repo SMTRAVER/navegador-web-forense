@@ -26,7 +26,6 @@ esa version no tiene verificar_sello.
 
   python test_sello_verificado.py [ruta al .py a probar]
 """
-import base64
 import datetime
 import hashlib
 import importlib.util

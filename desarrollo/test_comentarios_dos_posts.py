@@ -9,7 +9,6 @@ Se hace sobre una pagina local que imita la estructura medida (bloques con
 icono), porque lo que se prueba aca es el acumulador y no los anclajes de
 Instagram, que ya se midieron aparte contra el sitio real.
 """
-import io
 import json
 import os
 import re

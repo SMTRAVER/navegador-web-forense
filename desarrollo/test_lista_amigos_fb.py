@@ -19,10 +19,8 @@ Lo que se prueba aca es el motor —descartar el encabezado, acumular sin
 repetir, desplazar y traer el lote siguiente—, no los anclajes, que se midieron
 aparte contra el sitio.
 """
-import io
 import json
 import os
-import re
 import sys
 
 os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", "--enable-features=SharedArrayBuffer")

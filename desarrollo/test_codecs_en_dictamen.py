@@ -20,7 +20,6 @@ La prueba comprueba, ejecutando el codigo del programa:
 
   python test_codecs_en_dictamen.py [ruta al .py a probar]
 """
-import glob
 import importlib.util
 import json
 import os

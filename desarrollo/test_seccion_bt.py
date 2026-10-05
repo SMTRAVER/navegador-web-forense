@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """Renderiza la seccion de Binary Transparency con datos de muestra."""
 import types
-import unicodedata
 
 from fpdf.enums import XPos, YPos
 

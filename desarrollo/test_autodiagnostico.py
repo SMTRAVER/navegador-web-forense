@@ -11,7 +11,6 @@ import importlib.util
 import sys
 import tempfile
 import warnings
-from pathlib import Path
 
 warnings.filterwarnings("ignore")
 
@@ -46,9 +45,9 @@ else:
 
 p("\n=== 3) Los vectores criptograficos son los correctos ===")
 import hashlib
-p(f"  SHA-256('abc') esperado por FIPS 180-4:")
+p("  SHA-256('abc') esperado por FIPS 180-4:")
 p(f"    {hashlib.sha256(b'abc').hexdigest()}")
-p(f"    ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad  <- publicado")
+p("    ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad  <- publicado")
 ok_vec = hashlib.sha256(b"abc").hexdigest() == \
     "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
 p(f"    coinciden: {ok_vec}")
