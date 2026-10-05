@@ -14,7 +14,6 @@ importa:
 import hashlib
 import io
 import os
-import re
 import shutil
 import sys
 import textwrap
@@ -48,17 +47,37 @@ caso = app.ForensicCase(
     dict(app.AUTOR_SISTEMA))
 print("caso: %s" % caso.case_id)
 
-# se le suman capturas reales como evidencia
+# Capturas como evidencia. Si hay casos reales en el equipo se usan los
+# primeros; si no, se fabrican. La prueba no puede quedar sin evidencias
+# porque alguien limpio la carpeta de casos: un paquete vacio no prueba nada,
+# y asi tambien corre en un equipo recien clonado.
 import glob
+from PIL import Image, ImageDraw                              # noqa: E402
+
 reales = [p for p in sorted(set(glob.glob(os.path.join(
     r"C:\navegadorforense", "NAV_FORENSE", "*", "evidence", "**", "*.png"), recursive=True)))
     if os.path.getsize(p) > 100 * 1024][:6]
-for p in reales:
-    d = caso.dirs["evidence_img"] / os.path.basename(p)
-    shutil.copy2(p, d)
-    caso.register_evidence("CAPTURA_COMENTARIOS", str(d),
-                           source_url="https://www.instagram.com/p/EJEMPLO00002/")
-print("evidencias registradas: %d" % len(caso.evidences))
+if reales:
+    for p in reales:
+        d = caso.dirs["evidence_img"] / os.path.basename(p)
+        shutil.copy2(p, d)
+        caso.register_evidence("CAPTURA_COMENTARIOS", str(d),
+                               source_url="https://www.instagram.com/p/EJEMPLO00002/")
+else:
+    for k in range(4):
+        im = Image.new("RGB", (1200, 800), (255, 255, 255))
+        d = ImageDraw.Draw(im)
+        for i in range(16):
+            d.rounded_rectangle([40, 30 + i * 46, 900, 60 + i * 46], radius=8,
+                                fill=(240, 242, 245))
+            d.text((60, 38 + i * 46), "comentario de ejemplo %d-%d" % (k + 1, i + 1),
+                   fill=(20, 20, 20))
+        ruta = caso.dirs["evidence_img"] / ("Comentarios_%03d.png" % (k + 1))
+        im.save(ruta, "PNG", compress_level=1)
+        caso.register_evidence("CAPTURA_COMENTARIOS", str(ruta),
+                               source_url="https://www.instagram.com/p/EJEMPLO00002/")
+print("evidencias registradas: %d  (%s)"
+      % (len(caso.evidences), "capturas del equipo" if reales else "fabricadas"))
 
 # Se planta un temporal huerfano, como el que quedaria si la generacion del
 # informe se cortara antes de la limpieza.

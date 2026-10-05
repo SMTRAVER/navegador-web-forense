@@ -25,8 +25,9 @@ arma un caso REAL del programa y comprueba:
 
   python test_cadena_log.py [ruta al .py a probar]
 """
-import glob
+import base64
 import hashlib
+import hmac
 import importlib.util
 import json
 import os
@@ -34,7 +35,6 @@ import shutil
 import sqlite3
 import subprocess
 import sys
-import zipfile
 from pathlib import Path
 
 RUTA = (sys.argv[1] if len(sys.argv) > 1
@@ -192,17 +192,37 @@ debe(aciertos == 25, "25 claves al azar: acepta la firma buena y rechaza mensaje
 
 # ------------------------------------------------------------ 5
 print("\n5. Paquetes de versiones anteriores")
-viejos = sorted(glob.glob(r"C:\navegadorforense\NAV_FORENSE\*.zip"))
-if viejos:
-    destino = BASE / "paquete_viejo"
-    with zipfile.ZipFile(viejos[0]) as z:
-        z.extractall(destino)
-    carpeta = next(p for p in destino.iterdir() if p.is_dir())
-    rc, salida = verificador(carpeta)
-    debe("version anterior" in salida and "Integridad de" in salida,
-         "%s: se verifica por la via HMAC y avisa su alcance" % Path(viejos[0]).name)
-else:
-    print("  (no hay paquetes viejos en disco para probar)")
+# Los casos que ya se entregaron a tribunales llevan el log protegido con
+# HMAC y la clave adentro del paquete. El verificador tiene que seguir
+# leyendolos y, sobre todo, tiene que avisar hasta donde llega esa
+# comprobacion. Antes esto se probaba contra un ZIP real que hubiera quedado
+# en el equipo; ahora se arma uno con esa forma, para que la prueba no
+# dependa de que el perito conserve casos viejos en disco.
+viejo = BASE / "paquete_viejo" / "TFWF_20260101_000000_antiguo"
+(viejo / "db").mkdir(parents=True)
+clave = os.urandom(32)
+(viejo / "hmac.key").write_text(base64.b64encode(clave).decode("ascii") + "\n",
+                                encoding="utf-8")
+(viejo / "manifest.json").write_text(
+    json.dumps({"format": "TFWF_PRO", "case_id": viejo.name,
+                "security": {"hmac_algorithm": "HMAC-SHA256",
+                             "hmac_key_location": "hmac.key"}}), encoding="utf-8")
+with sqlite3.connect(str(viejo / "db" / "audit.db")) as con:
+    con.execute("CREATE TABLE audit_log (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                "ts TEXT, level TEXT, category TEXT, message TEXT, hmac TEXT)")
+    con.execute("CREATE TABLE evidence_registry (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                "ts TEXT, tipo TEXT, filename TEXT, path TEXT, sha256 TEXT, "
+                "size_bytes INTEGER, source_url TEXT, tsa_token TEXT, metadata TEXT)")
+    for k in range(20):
+        ts, nivel, cat, msg = "2026-01-01T00:00:%02d" % k, "INFO", "PRUEBA", "entrada %d" % k
+        firma = hmac.new(clave, f"{ts}|{nivel}|{cat}|{msg}".encode("utf-8"),
+                         hashlib.sha256).hexdigest()
+        con.execute("INSERT INTO audit_log (ts, level, category, message, hmac) "
+                    "VALUES (?,?,?,?,?)", (ts, nivel, cat, msg, firma))
+rc, salida = verificador(viejo)
+debe("version anterior" in salida and "Integridad de 20 entradas" in salida,
+     "un paquete con la proteccion vieja se verifica por la via HMAC y el "
+     "verificador avisa su alcance")
 
 # ------------------------------------------------------------ autodiagnostico
 ed = [c for c in caso.diagnostico if "Ed25519" in c["prueba"]]

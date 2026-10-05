@@ -1,6 +1,6 @@
 # Validacion de la herramienta
 
-**Traverso Forensics · Navegador Web Forense v1.0** | commit `2e90aeb` | 02/10/2026 19:49
+**Traverso Forensics · Navegador Web Forense v1.0** | commit `91e52f6` | 05/10/2026 09:23
 
 Este informe se genera ejecutando las pruebas, no escribiendolo: cada afirmacion queda con el resultado que dio en esta corrida. Para rehacerlo:
 
@@ -39,25 +39,25 @@ Esta validacion es propia. El NIST no probo esta herramienta ni la avala.
 | Prueba | Resultado | Tiempo | Salida |
 |---|---|---|---|
 | `test_autodiagnostico`  | PASA | 1 s |     coinciden: True |
-| `test_bt_integrado`  | PASA | 7 s | >>> RESULTADO                    : VERIFICADO |
-| `test_cadena_log`  | PASA | 11 s | RESULTADO: correcto |
-| `test_cierre_paquete`  | PASA | 7 s | RESULTADO: correcto |
+| `test_bt_integrado`  | PASA | 9 s | >>> RESULTADO                    : VERIFICADO |
+| `test_cadena_log`  | PASA | 3 s | RESULTADO: correcto |
+| `test_cierre_paquete`  | PASA | 12 s | RESULTADO: correcto |
 | `test_codecs_en_dictamen`  | PASA | 4 s | RESULTADO: correcto |
 | `test_comentarios_dos_posts`  | PASA | 3 s | BIEN: la segunda publicacion trae solo sus comentarios |
 | `test_contraste_hora`  | PASA | 2 s | RESULTADO: correcto |
 | `test_decision_tramo`  | PASA | 1 s | RESULTADO: correcto |
-| `test_descarga_no_pedida`  | PASA | 10 s | RESULTADO: correcto |
+| `test_descarga_no_pedida`  | PASA | 9 s | RESULTADO: correcto |
 | `test_espera_carga`  | PASA | 21 s | RESULTADO: correcto - nunca capturo sobre marcadores de carga |
-| `test_fluidez_scroll` informativa | PASA | 21 s | CONCLUSION: el interceptor traba el scroll |
+| `test_fluidez_scroll` informativa | PASA | 21 s | CONCLUSION: el interceptor NO explica los tirones |
 | `test_hash_herramienta`  | PASA | 1 s | RESULTADO: correcto |
 | `test_lista_amigos_fb`  | PASA | 27 s | RESULTADO: correcto |
 | `test_nombres_indefinidos`  | PASA | 0 s | RESULTADO: correcto - ningun nombre sin definir |
-| `test_peso_dictamen` informativa | PASA | 10 s | RESULTADO: correcto |
+| `test_peso_dictamen` informativa | PASA | 8 s | RESULTADO: correcto |
 | `test_reporte_comentarios` informativa | PASA | 1 s | PDF generado: C:\Users\MIGUE_~1\AppData\Local\Temp\prueba_reporte_comentarios\prueba_comentarios.pdf (3 pagina |
 | `test_rueda_scroll` informativa | PASA | 7 s | FUNCIONAN: postEvent NoScrollPhase (actual), sendEvent NoScrollPhase, postEvent x3 seguidos |
 | `test_seccion_bt`  | PASA | 1 s | PNG: C:\Users\MIGUE_~1\AppData\Local\Temp\bt_con_fuentes.png |
 | `test_sello_en_metadatos`  | PASA | 1 s | RESULTADO: correcto |
-| `test_sello_verificado`  | PASA | 6 s | RESULTADO: correcto |
+| `test_sello_verificado`  | PASA | 7 s | RESULTADO: correcto |
 | `test_texto_multilingue`  | PASA | 4 s | RESULTADO: correcto |
 | `test_velocidad_perfil` informativa | PASA | 4 s | para separar el costo de la configuracion del de la cache fria. |
 | `validacion_forense`  | PASA | 1 s | RESULTADO: 25 de 25 pruebas superadas |
