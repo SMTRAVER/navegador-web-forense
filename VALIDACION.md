@@ -1,6 +1,6 @@
 # Validacion de la herramienta
 
-**Traverso Forensics · Navegador Web Forense v1.0** | commit `91e52f6` | 05/10/2026 09:23
+**Traverso Forensics · Navegador Web Forense v1.0** | commit `08cbf07` | 05/10/2026 11:07
 
 Este informe se genera ejecutando las pruebas, no escribiendolo: cada afirmacion queda con el resultado que dio en esta corrida. Para rehacerlo:
 
@@ -33,22 +33,24 @@ Esta validacion es propia. El NIST no probo esta herramienta ni la avala.
 | **TF-RQ-08** | Metodo del CFTT | Las funciones criptograficas se contrastan contra vectores publicados (FIPS 180-4 y RFC 8032), no contra lo que afirme el fabricante. | `test_autodiagnostico`: PASA<br>`validacion_forense`: PASA | **PASA** |
 | **TF-RQ-09** | Afirmado en el dictamen | La prueba se puede verificar sin esta herramienta: el verificador usa solo la biblioteca estandar y el sello se comprueba con openssl. | `test_cadena_log`: PASA<br>`test_sello_verificado`: PASA | **PASA** |
 | **TF-RQ-10** | Afirmado en el dictamen | Se comprueba que el codigo que sirvio el sitio sea el que la plataforma publico ante un tercero (binary transparency). | `test_bt_integrado`: PASA<br>`test_seccion_bt`: PASA | **PASA** |
+| **TF-RQ-11** | Ofrecido en la interfaz | La grabacion de la sesion se hace con el perfil de calidad que eligio el perito —no con otro—, el archivo se cierra completo, y el dictamen declara con que se grabo. | `test_grabacion_perfil`: PASA | **PASA** |
 
 ## Detalle de cada corrida
 
 | Prueba | Resultado | Tiempo | Salida |
 |---|---|---|---|
 | `test_autodiagnostico`  | PASA | 1 s |     coinciden: True |
-| `test_bt_integrado`  | PASA | 9 s | >>> RESULTADO                    : VERIFICADO |
+| `test_bt_integrado`  | PASA | 10 s | >>> RESULTADO                    : VERIFICADO |
 | `test_cadena_log`  | PASA | 3 s | RESULTADO: correcto |
-| `test_cierre_paquete`  | PASA | 12 s | RESULTADO: correcto |
+| `test_cierre_paquete`  | PASA | 6 s | RESULTADO: correcto |
 | `test_codecs_en_dictamen`  | PASA | 4 s | RESULTADO: correcto |
 | `test_comentarios_dos_posts`  | PASA | 3 s | BIEN: la segunda publicacion trae solo sus comentarios |
 | `test_contraste_hora`  | PASA | 2 s | RESULTADO: correcto |
 | `test_decision_tramo`  | PASA | 1 s | RESULTADO: correcto |
 | `test_descarga_no_pedida`  | PASA | 9 s | RESULTADO: correcto |
 | `test_espera_carga`  | PASA | 21 s | RESULTADO: correcto - nunca capturo sobre marcadores de carga |
-| `test_fluidez_scroll` informativa | PASA | 21 s | CONCLUSION: el interceptor NO explica los tirones |
+| `test_fluidez_scroll` informativa | PASA | 21 s | CONCLUSION: el interceptor traba el scroll |
+| `test_grabacion_perfil`  | PASA | 22 s | RESULTADO: correcto |
 | `test_hash_herramienta`  | PASA | 1 s | RESULTADO: correcto |
 | `test_lista_amigos_fb`  | PASA | 27 s | RESULTADO: correcto |
 | `test_nombres_indefinidos`  | PASA | 0 s | RESULTADO: correcto - ningun nombre sin definir |
@@ -57,7 +59,7 @@ Esta validacion es propia. El NIST no probo esta herramienta ni la avala.
 | `test_rueda_scroll` informativa | PASA | 7 s | FUNCIONAN: postEvent NoScrollPhase (actual), sendEvent NoScrollPhase, postEvent x3 seguidos |
 | `test_seccion_bt`  | PASA | 1 s | PNG: C:\Users\MIGUE_~1\AppData\Local\Temp\bt_con_fuentes.png |
 | `test_sello_en_metadatos`  | PASA | 1 s | RESULTADO: correcto |
-| `test_sello_verificado`  | PASA | 7 s | RESULTADO: correcto |
+| `test_sello_verificado`  | PASA | 6 s | RESULTADO: correcto |
 | `test_texto_multilingue`  | PASA | 4 s | RESULTADO: correcto |
 | `test_velocidad_perfil` informativa | PASA | 4 s | para separar el costo de la configuracion del de la cache fria. |
 | `validacion_forense`  | PASA | 1 s | RESULTADO: 25 de 25 pruebas superadas |
@@ -68,6 +70,7 @@ Esta validacion es propia. El NIST no probo esta herramienta ni la avala.
 - **CDX-CR-03 / CA-03.** No se presenta al usuario una lista de servicios soportados. El programa es un navegador: sirve para cualquier sitio, y tiene recorridos automaticos para Instagram, Facebook, TikTok y WhatsApp Web. Esta documentado en el README, no en la interfaz.
 - **CDX-CA-06 (parcial).** Las lenguas de derecha a izquierda se componen con HarfBuzz y se ven correctamente, pero el programa no aplica el algoritmo bidireccional completo de Unicode: un parrafo que mezcle arabe y latino en la misma linea puede quedar con los tramos en otro orden. El listado .txt conserva el original.
 - **Video H.264/AAC.** El motor no reproduce esos codecs y el recuadro del video puede verse en negro. El video se adquiere como archivo original con su hash. Declarado en el dictamen.
+- **Perfil de grabacion sin FFmpeg.** Si el equipo no tiene FFmpeg, la sesion se graba con OpenCV en mp4v y el perfil de calidad elegido no se puede aplicar: FFV1 sin perdida no esta disponible por esa via. El desplegable queda deshabilitado y el acta de custodia lo declara, pero la limitacion existe y depende del equipo, no del programa.
 - **Repeticion independiente.** Las pruebas corrieron en un solo equipo. El CFTT espera que el resultado se repita en otro, con otro operador.
 - **Revision externa.** La validacion es propia. Ningun laboratorio ni organismo la reviso.
 
@@ -75,9 +78,9 @@ Esta validacion es propia. El NIST no probo esta herramienta ni la avala.
 
 | | |
 |---|---|
-| Codigo fuente validado | `54e9843f94bc844fd11373aebbe401aa3d4c3f749b50b2bb639b6c86850956cd` |
-| Conjunto de archivos de la version compilada | `d53310d71ac80160ef418b0c3000b816e24323361cfb9f9dcb74309e371f6add` |
-| Instalador | `1755dc0edbdb6286ed7191c9aac8dea46c0dba32ada69157ce45401f7a32eb95` |
+| Codigo fuente validado | `9b378514e4d57d05bec3def002a62194b2868374fd6ec07f9c2c6a8144735699` |
+| Conjunto de archivos de la version compilada | `8c6c994459ba41e56aff3b2767461605b43926f2a3b7bd757cefeb9a42a318de` |
+| Instalador | `fd3733051b33a09be9888dfc7d53302b7c719167f99da9e342c7f56e9c2b2610` |
 | Motor del navegador | Qt WebEngine 6.11.2 - Chromium 140.0.7339.225, parches de seguridad al nivel 151.0.7922.71 |
 | Fuentes del informe | Arial y Courier New incrustadas, con respaldo de Microsoft YaHei (chino y japones) y Segoe UI Emoji, y composicion de derecha a izquierda con HarfBuzz |
 | Raices de sellado reconocidas | Certum Trusted Network CA 2, DigiCert Trusted Root G4, FreeTSA Root CA, Sectigo Public Time Stamping Root R46 |

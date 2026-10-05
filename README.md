@@ -15,7 +15,10 @@ Autor: Miguel Angel Alfredo Traverso, Traverso Forensics.
 - Capturas de pantalla y de página completa. Los recorridos de comentarios, de listas de
   contactos y de conversaciones de WhatsApp Web se hacen solos, desplazando con la rueda
   del mouse como lo haría una persona.
-- Video de la sesión con FFmpeg, tráfico de red en HAR 1.2 y archivo WARC (ISO 28500).
+- Video de la sesión con FFmpeg, en el perfil que se elija: FFV1 sin pérdida cuando la
+  grabación es la prueba, H.264 cuando alcanza con que se vea. El dictamen declara con
+  cuál se grabó y con qué parámetros, porque no es lo mismo.
+- Tráfico de red en HAR 1.2 y archivo WARC (ISO 28500).
 - La página archivada en MHTML, su código fuente, las cabeceras HTTP, el certificado TLS
   del servidor y el archivo hosts del equipo. Con eso se acredita a qué servidor se
   accedió y que el dominio no estaba desviado.

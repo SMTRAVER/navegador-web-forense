@@ -26,10 +26,14 @@
 #   Verificar instalacion:
 #     ffmpeg -version
 #
-#   Sin FFmpeg el programa funciona con normalidad, PERO:
-#     • La grabacion de sesion NO tendra audio
-#     • El video se guarda sin compresion H.264 (archivos mas grandes)
-#     • No se realiza la transcodificacion de post-grabacion
+#   Sin FFmpeg el programa funciona con normalidad, PERO la grabacion de
+#   sesion queda limitada:
+#     • Se graba con OpenCV en mp4v, con lo que el perfil de calidad que se
+#       elige en la barra (FFV1 sin perdida, H.264) no se puede aplicar. El
+#       desplegable queda deshabilitado y el acta lo declara.
+#     • La grabacion no lleva audio en ningun caso, con FFmpeg o sin el: se
+#       saco a proposito, porque podia recoger conversaciones de la oficina
+#       ajenas a la causa.
 # ==============================================================================
 
 # ── INTERFAZ GRAFICA Qt6 ───────────────────────────────────────────────────

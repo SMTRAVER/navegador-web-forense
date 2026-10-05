@@ -84,6 +84,11 @@ REQUISITOS = [
      "Se comprueba que el codigo que sirvio el sitio sea el que la plataforma "
      "publico ante un tercero (binary transparency).",
      ["test_bt_integrado", "test_seccion_bt"]),
+    ("TF-RQ-11", "Ofrecido en la interfaz",
+     "La grabacion de la sesion se hace con el perfil de calidad que eligio el "
+     "perito —no con otro—, el archivo se cierra completo, y el dictamen declara "
+     "con que se grabo.",
+     ["test_grabacion_perfil"]),
 ]
 
 # Lo que NO se cumple. Va en el informe: una validacion que solo lista exitos
@@ -103,6 +108,10 @@ LIMITES = [
     ("Video H.264/AAC", "El motor no reproduce esos codecs y el recuadro del video puede verse "
      "en negro. El video se adquiere como archivo original con su hash. Declarado en el "
      "dictamen."),
+    ("Perfil de grabacion sin FFmpeg", "Si el equipo no tiene FFmpeg, la sesion se graba con "
+     "OpenCV en mp4v y el perfil de calidad elegido no se puede aplicar: FFV1 sin perdida no "
+     "esta disponible por esa via. El desplegable queda deshabilitado y el acta de custodia lo "
+     "declara, pero la limitacion existe y depende del equipo, no del programa."),
     ("Repeticion independiente", "Las pruebas corrieron en un solo equipo. El CFTT espera que "
      "el resultado se repita en otro, con otro operador."),
     ("Revision externa", "La validacion es propia. Ningun laboratorio ni organismo la reviso."),

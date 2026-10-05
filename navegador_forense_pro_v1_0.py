@@ -2598,6 +2598,13 @@ class ScreenRecorder(QThread):
         self._proc = None
         self.output_path = ""
         self.window_geo = window_geo
+        # Queda en False si hubo que forzar el cierre: en ese caso puede faltar
+        # el tramo final del video, y el acta tiene que decirlo.
+        self.cierre_limpio = True
+        # Con que se grabo realmente. El acta declara esto y no el perfil que
+        # se pidio: si FFmpeg no esta, el perfil no se aplica y el archivo sale
+        # en otro formato. Lo que se afirma tiene que ser lo que paso.
+        self.motor_usado = ""
 
     def _check_ffmpeg(self) -> bool:
         try:
@@ -2608,9 +2615,16 @@ class ScreenRecorder(QThread):
 
     def run(self):
         ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        ext = self.CODEC_PROFILES[self.profile]["ext"]
+        if self.use_ffmpeg:
+            ext = self.CODEC_PROFILES[self.profile]["ext"]
+        else:
+            # OpenCV escribe mp4v, que no entra en Matroska: si el perfil pedia
+            # .mkv el archivo saldria ilegible. Se usa el contenedor que el
+            # codec admite, y el acta aclara que el perfil no se aplico.
+            ext = ".mp4"
         self.output_path = str(self.output_dir / f"Sesion_{ts}{ext}")
 
+        self.motor_usado = "ffmpeg" if self.use_ffmpeg else "opencv"
         if self.use_ffmpeg:
             self._record_ffmpeg()
         else:
@@ -2649,8 +2663,11 @@ class ScreenRecorder(QThread):
                     "-i", "desktop",
                 ] + profile_args + [self.output_path]
 
+                # La entrada estandar queda abierta: por ahi se le manda la 'q'
+                # que lo cierra limpio al detener la grabacion.
                 self._proc = subprocess.Popen(
                     cmd,
+                    stdin=subprocess.PIPE,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
@@ -2669,20 +2686,30 @@ class ScreenRecorder(QThread):
 
                 self._proc = subprocess.Popen(
                     cmd,
+                    stdin=subprocess.PIPE,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE
                 )
 
             self.recording = True
-            # communicate() drena stdout/stderr concurrentemente con wait(),
-            # evitando deadlock cuando el buffer del pipe se llena (>64 KB en Windows).
+            # Se drena stderr renglon por renglon mientras FFmpeg corre, para que
+            # el pipe no se llene y lo deje bloqueado (en Windows el buffer son
+            # 64 KB y una grabacion larga lo pasa de sobra).
+            #
+            # No se usa communicate(): esa funcion cierra la entrada estandar, y
+            # es por ahi que stop() le manda la 'q' con la que FFmpeg cierra el
+            # archivo como corresponde.
+            _cola = []
             try:
-                _, stderr_bytes = self._proc.communicate()
-                return_code = self._proc.returncode
-                stderr_output = stderr_bytes.decode("utf-8", errors="ignore")[-500:] if stderr_bytes else ""
+                for _linea in iter(self._proc.stderr.readline, b""):
+                    _cola.append(_linea.decode("utf-8", errors="ignore").rstrip())
+                    if len(_cola) > 40:
+                        del _cola[0]
+                return_code = self._proc.wait()
             except Exception as _comm_err:
                 return_code = -1
-                stderr_output = str(_comm_err)
+                _cola.append(str(_comm_err))
+            stderr_output = chr(10).join(_cola)[-500:]
 
             self.case.log("INFO", "VIDEO", f"FFmpeg termino con codigo {return_code}")
             if stderr_output:
@@ -2737,19 +2764,43 @@ class ScreenRecorder(QThread):
         self.recording = False
 
         if self._proc and self._proc.poll() is None:
+            # FFmpeg cierra bien cuando recibe una 'q' por la entrada estandar:
+            # vacia la cola del codificador y escribe el indice del archivo.
+            #
+            # Matarlo con CTRL_BREAK, como se hacia antes, corta el archivo
+            # donde este: con FFV1 se perdia el ultimo tramo —el archivo quedaba
+            # truncado en un limite de buffer— y con H.264 se perdia todo, porque
+            # libx264 analiza los cuadros por adelantado y a los pocos segundos
+            # todavia no habia escrito ninguno. El video salia de cero bytes.
+            _cerro = False
             try:
-                if platform.system() == "Windows":
-                    os.kill(self._proc.pid, signal.CTRL_BREAK_EVENT)
-                else:
-                    self._proc.terminate()
-
-                self._proc.wait(timeout=10)
+                if self._proc.stdin and not self._proc.stdin.closed:
+                    self._proc.stdin.write(b"q")
+                    self._proc.stdin.flush()
+                    self._proc.stdin.close()
+                    self._proc.wait(timeout=20)
+                    _cerro = True
             except subprocess.TimeoutExpired:
-                self.case.log("WARN", "VIDEO", "FFmpeg no respondio, forzando kill")
-                self._proc.kill()
-                self._proc.wait(timeout=3)
+                self.case.log("ADVERTENCIA", "VIDEO",
+                              "FFmpeg no cerro al pedirselo: se lo interrumpe")
             except Exception as e:
-                self.case.log("ERROR", "VIDEO", f"Error al detener FFmpeg: {e}")
+                self.case.log("ADVERTENCIA", "VIDEO",
+                              f"No se le pudo pedir el cierre a FFmpeg: {e}")
+
+            self.cierre_limpio = _cerro
+            if not _cerro and self._proc.poll() is None:
+                try:
+                    if platform.system() == "Windows":
+                        os.kill(self._proc.pid, signal.CTRL_BREAK_EVENT)
+                    else:
+                        self._proc.terminate()
+                    self._proc.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    self.case.log("ERROR", "VIDEO", "FFmpeg no respondio, forzando kill")
+                    self._proc.kill()
+                    self._proc.wait(timeout=3)
+                except Exception as e:
+                    self.case.log("ERROR", "VIDEO", f"Error al detener FFmpeg: {e}")
 
         self.requestInterruption()
         if not self.wait(8000):
@@ -5064,6 +5115,13 @@ class TraversoWebForensicsPro(QMainWindow):
         self.combo_quality.setStyleSheet("color: black; background: white;")
         for key, val in ScreenRecorder.CODEC_PROFILES.items():
             self.combo_quality.addItem(val["label"], key)
+        # Sin FFmpeg no hay perfil que aplicar: el desplegable se apaga en vez
+        # de ofrecer una eleccion que el programa no puede cumplir.
+        if not self._is_ffmpeg_available():
+            self.combo_quality.setEnabled(False)
+            self.combo_quality.setToolTip(
+                "Sin FFmpeg instalado la grabacion sale en formato fijo (mp4v, 5 cuadros "
+                "por segundo) y el perfil de calidad no se puede aplicar")
         q_lay.addWidget(self.combo_quality)
         h_lay.addWidget(quality_group)
 
@@ -6831,86 +6889,10 @@ class TraversoWebForensicsPro(QMainWindow):
                 self._ffmpeg_ok = False
         return self._ffmpeg_ok
 
-    def _mux_and_register(self, video_path: str, ts: str):
-        """
-        Hilo: transcodifica el video de sesion a H.264 y registra la evidencia.
-
-        La grabacion es solo imagen, sin pista de audio. Antes se capturaba
-        tambien el sonido del equipo, y cuando no habia un dispositivo de
-        mezcla disponible FFmpeg caia al microfono: la grabacion terminaba
-        registrando lo que se hablara en la oficina. Eso no forma parte de lo
-        que se esta documentando y puede recoger conversaciones ajenas a la
-        causa, asi que se saco de raiz y no como una opcion que se pueda
-        activar por error.
-        """
-        # N3: time importado globalmente: import local eliminado
-        vid_dir = self.case.dirs.get("evidence_vid", Path("."))
-        final_path = str(vid_dir / f"Sesion_{ts}_final.mp4")
-
-        try:
-            # -an descarta cualquier pista de audio. Es redundante porque la
-            # fuente no la tiene, y esta puesto igual: deja constancia de que
-            # el archivo resultante no puede contener sonido.
-            cmd = [
-                "ffmpeg", "-y",
-                "-i", video_path,
-                "-an",
-                "-c:v", "libx264", "-crf", "28", "-preset", "fast",
-                "-movflags", "+faststart",
-                final_path
-            ]
-            r = subprocess.run(
-                cmd, capture_output=True, timeout=300,
-                creationflags=subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0
-            )
-            if r.returncode != 0:
-                raise RuntimeError(r.stderr.decode("utf-8", errors="ignore")[-500:])
-        except Exception as e:
-            self.case.log("WARN", "VIDEO", f"Mux/transcode error: {e} — usando video original")
-            final_path = video_path
-        else:
-            # Eliminar archivos temporales si el mux fue exitoso
-            try:
-                if final_path != video_path:
-                    os.remove(video_path)
-            except Exception:
-                pass
-
-        if os.path.exists(final_path) and os.path.getsize(final_path) > 0:
-            sid = write_custody_sidecar(
-                path       = final_path,
-                tipo       = "VIDEO_SESION",
-                source_url = "",
-                perito     = self.perito_data,
-                case_id    = self.case.case_id,
-                extra      = {
-                    "FPS grabado":  str(self._rec_fps),
-                    "ROI (px)":    str(self.video_roi),
-                    # Consta expresamente que no hay audio: en un video de
-                    # pericia, que no tenga sonido tiene que ser un dato
-                    # declarado y no algo que el receptor deduzca.
-                    "Audio":       "no - la grabacion es solo imagen",
-                }
-            )
-            self.case.register_evidence("VIDEO_SESION", final_path)
-            self.append_console("─" * 60)
-            self.append_console(f"✓ VIDEO    : {Path(final_path).name}")
-            self.append_console(f"  SHA-256  : {sid['sha256']}")
-            self.append_console(f"  Tamaño   : {sid['size']:,} bytes  ({sid['size']/1024/1024:.2f} MB)")
-            self.append_console("  Audio    : no (grabacion de imagen unicamente)")
-            self.append_console(f"  Momento  : {sid['ts_legible']}")
-            self.append_console(f"  Sidecar  : {Path(sid['sha256_path']).name}")
-            self.append_console(f"  Acta     : {Path(sid['custodia_path']).name}")
-            self.append_console("─" * 60)
-            self.case.log("INFO", "VIDEO",
-                f"Video certificado: {final_path} | SHA256: {sid['sha256']} | sin audio")
-        else:
-            self.append_console("✗ ERROR: Archivo de video final no encontrado o vacío")
-
     def toggle_recording(self):
         if not self.is_recording:
             # INICIO DE GRABACION
-            profile = self.combo_quality.currentData()
+            perfil = self.combo_quality.currentData() or "h264_high"
             dpr = self.devicePixelRatio()
             geom = self.geometry()
             p = self.mapToGlobal(self.rect().topLeft())
@@ -6922,6 +6904,43 @@ class TraversoWebForensicsPro(QMainWindow):
             h = h_raw if h_raw % 2 == 0 else h_raw - 1
 
             self.video_roi = (int(p.x() * dpr), int(p.y() * dpr), w, h)
+
+            # Con FFmpeg se graba directo en el formato elegido.
+            #
+            # Antes se grababa siempre con OpenCV a 5 cuadros por segundo y se
+            # transcodificaba despues a H.264 con calidad fija, de modo que el
+            # perfil que elegia el perito no se aplicaba en ningun lado: quien
+            # pedia FFV1 sin perdida igual terminaba con un video comprimido
+            # con perdida, y sin forma de advertirlo.
+            if self._is_ffmpeg_available():
+                self._rec_perfil = perfil
+                self._video_cerrado = False
+                self._recorder = ScreenRecorder(
+                    output_dir = self.case.dirs["evidence_vid"],
+                    case       = self.case,
+                    profile    = perfil,
+                    window_geo = self.video_roi)
+                self._recorder.stopped.connect(self._video_terminado)
+                self._recorder.error.connect(self._video_fallo)
+                self._recorder.start()
+                self.is_recording = True
+                self.btn_rec.setText("⏹ DETENER GRABACION")
+                self.combo_quality.setEnabled(False)
+                etiqueta = ScreenRecorder.CODEC_PROFILES[perfil]["label"]
+                self.append_console(f"▶ Grabacion INICIADA | {etiqueta} | 10fps | "
+                                    f"ROI: {self.video_roi} | solo imagen, sin audio")
+                self.status.showMessage("GRABANDO...")
+                self.case.log("INFO", "VIDEO",
+                              f"Grabacion iniciada con FFmpeg | perfil: {perfil} "
+                              f"({etiqueta}) | ROI: {self.video_roi} | sin captura de audio")
+                return
+
+            # Sin FFmpeg se graba con OpenCV, en formato fijo. El perfil
+            # elegido no se puede aplicar y asi queda asentado.
+            self._rec_perfil = ""
+            self.case.log("ADVERTENCIA", "VIDEO",
+                          "FFmpeg no esta disponible: la grabacion sale en mp4v a 5 "
+                          "cuadros por segundo y el perfil de calidad elegido no se aplica")
             self._rec_fps   = 5           # 5fps: equilibrio calidad/CPU
             self._rec_spf   = 1.0 / self._rec_fps
 
@@ -6959,6 +6978,36 @@ class TraversoWebForensicsPro(QMainWindow):
 
         else:
             # DETENCION
+            if getattr(self, "_recorder", None) is not None:
+                # FFmpeg vacia el codificador y escribe el indice del archivo
+                # cuando se le pide el cierre; stop() lo espera.
+                # El boton se apaga antes de procesar eventos: cerrar el
+                # archivo puede llevar varios segundos, y un segundo clic en
+                # ese rato volvia a entrar aca y reventaba al salir, cuando el
+                # grabador ya se habia soltado.
+                self.btn_rec.setEnabled(False)
+                grabador = self._recorder
+                self.append_console("⏹ Deteniendo la grabacion y cerrando el archivo...")
+                self.status.showMessage("Cerrando el video...")
+                QApplication.processEvents()
+                grabador.stop()
+
+                # stop() ya espero al hilo, pero la señal de cierre viaja en
+                # cola entre hilos. Se vacia la cola para que el video quede
+                # registrado ahora: el dictamen cuenta las evidencias apenas
+                # vuelve de aca, y un video que se registra despues no entra.
+                QApplication.processEvents()
+                if not getattr(self, "_video_cerrado", False):
+                    # La señal no llego: se cierra con lo que quedo en disco.
+                    self._video_terminado(getattr(grabador, "output_path", ""))
+
+                self.is_recording = False
+                self.btn_rec.setText("🔴 GRABAR SESION")
+                self.btn_rec.setEnabled(True)
+                self.combo_quality.setEnabled(True)
+                self.status.showMessage(f"Caso: {self.case.case_id} | Listo")
+                return
+
             # 1. Señalizar al hilo que debe detenerse
             if hasattr(self, "_rec_stop_event"):
                 self._rec_stop_event.set()
@@ -6983,43 +7032,134 @@ class TraversoWebForensicsPro(QMainWindow):
             video_path = getattr(self, "video_path", "")
 
             if video_path and os.path.exists(video_path) and os.path.getsize(video_path) > 0:
-                ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                if self._is_ffmpeg_available():
-                    self.append_console("⏳ Procesando video (transcodificando H.264)...")
-                    # C3: guardar referencia para join() en closeEvent
-                    self._mux_thread = threading.Thread(
-                        target=self._mux_and_register,
-                        args=(video_path, ts),
-                        daemon=True
-                    )
-                    self._mux_thread.start()
-                else:
-                    # Sin FFmpeg: registrar video mp4v directamente
-                    sid = write_custody_sidecar(
-                        path       = video_path,
-                        tipo       = "VIDEO_SESION",
-                        source_url = "",
-                        perito     = self.perito_data,
-                        case_id    = self.case.case_id,
-                        extra      = {
-                            "FPS grabado": str(self._rec_fps),
-                            "ROI (px)":   str(self.video_roi),
-                            "Audio":       "no (FFmpeg no disponible)",
-                        }
-                    )
-                    self.case.register_evidence("VIDEO_SESION", video_path)
-                    self.append_console("─" * 60)
-                    self.append_console(f"✓ VIDEO    : {Path(video_path).name}")
-                    self.append_console(f"  SHA-256  : {sid['sha256']}")
-                    self.append_console(f"  Tamaño   : {sid['size']:,} bytes  ({sid['size']/1024/1024:.2f} MB)")
-                    self.append_console(f"  Momento  : {sid['ts_legible']}")
-                    self.append_console(f"  Sidecar  : {Path(sid['sha256_path']).name}")
-                    self.append_console(f"  Acta     : {Path(sid['custodia_path']).name}")
-                    self.append_console("─" * 60)
-                    self.case.log("INFO", "VIDEO",
-                        f"Video certificado: {video_path} | SHA256: {sid['sha256']}")
+                # Aca solo se llega cuando FFmpeg no esta: con FFmpeg la
+                # grabacion la hace ScreenRecorder y termina en
+                # _video_terminado. El video queda tal como lo escribio OpenCV.
+                #
+                # Antes se lo transcodificaba a H.264 con CRF 28 fijo, y ese
+                # era el defecto: el perfil de calidad que elegia el perito no
+                # se aplicaba en ningun lado. Se saco el paso de raiz —una
+                # recompresion que nadie pidio no tiene lugar sobre la prueba.
+                _datos = {
+                    "Perfil de grabacion":  "no aplicado: FFmpeg no disponible",
+                    "Codec y parametros":   "mp4v (OpenCV), sin transcodificar",
+                    "Cuadros por segundo":  str(self._rec_fps),
+                    "Region de pantalla":   str(self.video_roi),
+                    "Audio":                "no se captura",
+                    "Grabado por":          "OpenCV",
+                }
+                sid = write_custody_sidecar(
+                    path       = video_path,
+                    tipo       = "VIDEO_SESION",
+                    source_url = "",
+                    perito     = self.perito_data,
+                    case_id    = self.case.case_id,
+                    extra      = _datos)
+                self.case.register_evidence("VIDEO_SESION", video_path,
+                                            metadata=_datos)
+                self.append_console("─" * 60)
+                self.append_console(f"✓ VIDEO    : {Path(video_path).name}")
+                self.append_console(f"  SHA-256  : {sid['sha256']}")
+                self.append_console(f"  Perfil   : {_datos['Perfil de grabacion']}")
+                self.append_console(f"  Tamaño   : {sid['size']:,} bytes  ({sid['size']/1024/1024:.2f} MB)")
+                self.append_console(f"  Momento  : {sid['ts_legible']}")
+                self.append_console(f"  Sidecar  : {Path(sid['sha256_path']).name}")
+                self.append_console(f"  Acta     : {Path(sid['custodia_path']).name}")
+                self.append_console("─" * 60)
+                self.case.log("INFO", "VIDEO",
+                    f"Video certificado: {video_path} | SHA256: {sid['sha256']} | "
+                    f"grabado con OpenCV, sin aplicar perfil de calidad")
             else:
                 self.append_console("✗ ERROR: Archivo de video vacio o no encontrado")
+
+    def _video_terminado(self, ruta: str):
+        """
+        Cierra la grabacion hecha con FFmpeg: acta, hash y registro.
+
+        Lo que se declara aca es lo que efectivamente se uso para grabar, no lo
+        que ofrece la interfaz: el perfil, el codec con sus parametros, los
+        cuadros por segundo y la region de pantalla. De ahi lo toma el dictamen.
+
+        Puede entrar por la señal del grabador o por llamada directa al
+        detener, segun que llegue primero. Se ejecuta una sola vez: registrar
+        el mismo video dos veces lo duplicaria en el inventario.
+        """
+        if getattr(self, "_video_cerrado", False):
+            return
+        # El archivo se revisa ANTES de marcar el cierre como hecho: si no hay
+        # video, el que tiene que dar el aviso es _video_fallo, y esa marca lo
+        # haria volver sin registrar nada. Un fallo en silencio es lo peor que
+        # puede pasar aca.
+        if not (ruta and os.path.exists(ruta) and os.path.getsize(ruta) > 0):
+            self._video_fallo("el archivo de video quedo vacio")
+            return
+        self._video_cerrado = True
+        perfil = getattr(self, "_rec_perfil", "") or "h264_high"
+        info = ScreenRecorder.CODEC_PROFILES.get(perfil, {})
+        x, y, w, h = getattr(self, "video_roi", (0, 0, 0, 0))
+        grabador = getattr(self, "_recorder", None)
+        limpio = getattr(grabador, "cierre_limpio", True)
+        # Se declara el motor que grabo, no el que se iba a usar. FFmpeg puede
+        # haber dejado de estar entre el momento en que se armo el grabador y
+        # el momento en que arranco: ahi el perfil no se aplica.
+        con_ffmpeg = getattr(grabador, "motor_usado", "ffmpeg") != "opencv"
+        if con_ffmpeg:
+            datos = {
+                "Perfil de grabacion":  info.get("label", perfil),
+                "Codec y parametros":   " ".join(info.get("args", [])),
+                "Cuadros por segundo":  "10",
+                "Grabado por":          "FFmpeg (gdigrab)" if platform.system() == "Windows"
+                                        else "FFmpeg (x11grab)",
+            }
+        else:
+            datos = {
+                "Perfil de grabacion":  f"no aplicado: se pidio "
+                                        f"{info.get('label', perfil)} pero FFmpeg "
+                                        f"no estaba disponible al grabar",
+                "Codec y parametros":   "mp4v (OpenCV), sin transcodificar",
+                "Cuadros por segundo":  "10",
+                "Grabado por":          "OpenCV",
+            }
+        datos.update({
+            "Region de pantalla":   f"{w}x{h} px desde ({x},{y})",
+            "Audio":                "no se captura",
+            "Cierre del archivo":   "normal" if limpio else
+                                    "forzado: puede faltar el tramo final",
+        })
+        self._recorder = None
+        sid = write_custody_sidecar(
+            path       = ruta,
+            tipo       = "VIDEO_SESION",
+            source_url = "",
+            perito     = self.perito_data,
+            case_id    = self.case.case_id,
+            extra      = datos)
+        self.case.register_evidence("VIDEO_SESION", ruta, metadata=datos)
+        self.append_console("─" * 60)
+        self.append_console(f"✓ VIDEO    : {Path(ruta).name}")
+        self.append_console(f"  Perfil   : {datos['Perfil de grabacion']}")
+        self.append_console(f"  SHA-256  : {sid['sha256']}")
+        self.append_console(f"  Tamaño   : {sid['size']:,} bytes  "
+                            f"({sid['size'] / 1024 / 1024:.2f} MB)")
+        self.append_console(f"  Acta     : {Path(sid['custodia_path']).name}")
+        self.append_console("─" * 60)
+        self.case.log("INFO", "VIDEO",
+                      f"Video certificado: {ruta} | SHA256: {sid['sha256']} | "
+                      f"perfil: {datos['Perfil de grabacion']} | sin audio")
+
+    def _video_fallo(self, mensaje: str):
+        """La grabacion no produjo archivo: tiene que constar, no pasar en silencio."""
+        if getattr(self, "_video_cerrado", False):
+            return
+        self._video_cerrado = True
+        self._recorder = None
+        self.is_recording = False
+        self.btn_rec.setText("🔴 GRABAR SESION")
+        self.btn_rec.setEnabled(True)
+        self.combo_quality.setEnabled(True)
+        self.append_console(f"✗ La grabacion de la sesion fallo: {mensaje}")
+        self.case.log("ERROR", "VIDEO", f"Grabacion fallida: {mensaje}")
+        registrar_fallo_critico("VIDEO", f"La grabacion de la sesion fallo: {mensaje}")
 
     def _grab_thread(self):
         """
@@ -9613,15 +9753,11 @@ class TraversoWebForensicsPro(QMainWindow):
         una leyenda con el nombre y SHA-256 del paquete ZIP del caso.
         Cuando es None se comporta igual que antes (botón GENERAR DICTAMEN).
         """
+        # Detener la grabacion deja el video cerrado y registrado antes de
+        # seguir: toggle_recording no vuelve hasta que la evidencia esta
+        # anotada, asi que el inventario que se cuenta mas abajo la incluye.
         if self.is_recording:
             self.toggle_recording()
-
-        # Si el hilo de transcodificación (mux) todavía está corriendo,
-        # esperar hasta 310s para que registre el video antes de contar evidencias.
-        mux = getattr(self, "_mux_thread", None)
-        if mux is not None and mux.is_alive():
-            self.append_console("⏳ Esperando finalización del procesamiento de video antes de generar el informe...")
-            mux.join(timeout=310)
 
         ts_gen = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         # Cierre firmado del log al emitir el dictamen: el extremo de la cadena
@@ -9882,6 +10018,30 @@ class TraversoWebForensicsPro(QMainWindow):
             if ev.get('source_url'):
                 pdf.set_font(FUENTE_INFORME, "I", 7)
                 pdf.cell(0, 4, sanitize_text(f"  URL origen: {ev['source_url'][:100]}"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+
+            # Con que se grabo el video de sesion. Importa: el perito elige la
+            # calidad y el dictamen tiene que decir cual se uso de verdad.
+            if ev.get("tipo") == "VIDEO_SESION":
+                try:
+                    _vid = json.loads(ev.get("metadata") or "{}")
+                except Exception:
+                    _vid = {}
+                if _vid:
+                    pdf.set_font(FUENTE_INFORME, "I", 7)
+                    pdf.cell(0, 4, sanitize_text(
+                        f"  Grabado con: {_vid.get('Perfil de grabacion', 'no informado')} | "
+                        f"{_vid.get('Cuadros por segundo', '?')} cuadros por segundo | "
+                        f"region {_vid.get('Region de pantalla', '?')} | "
+                        f"{_vid.get('Audio', '')}"),
+                        new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+                    # Un cierre forzado deja el video sin su tramo final. Es una
+                    # reserva sobre la prueba: va dicha, no omitida.
+                    if _vid.get("Cierre del archivo", "normal") != "normal":
+                        pdf.set_font(FUENTE_INFORME, "B", 7)
+                        pdf.cell(0, 4, sanitize_text(
+                            "  RESERVA: el cierre del archivo de video fue "
+                            + _vid["Cierre del archivo"]),
+                            new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
             thumb_path = None
             thumb_caption = ""
@@ -11516,19 +11676,14 @@ class TraversoWebForensicsPro(QMainWindow):
 
     def closeEvent(self, event):
         """
-        C3: Espera a que el hilo de mux/transcodificación termine antes de
-        salir. Sin este join, cerrar la ventana mientras FFmpeg transcodifica
-        puede dejar el MP4 final sin el moov atom (evidencia corrupta).
-        Timeout de 310s > timeout interno de subprocess.run(..., timeout=300).
+        Cerrar la ventana mientras se graba no puede dejar el video a medias.
+
+        toggle_recording le pide el cierre a FFmpeg y lo espera, de modo que el
+        archivo queda con su indice escrito y la evidencia anotada antes de que
+        la ventana se vaya.
         """
         if self.is_recording:
             self.toggle_recording()
-        mux = getattr(self, "_mux_thread", None)
-        if mux is not None and mux.is_alive():
-            self.append_console("⏳ Esperando finalización del procesamiento de video antes de cerrar...")
-            mux.join(timeout=310)
-            if mux.is_alive():
-                self.case.log("WARN", "VIDEO", "closeEvent: mux thread no terminó en 310s — cerrando de todas formas")
         super().closeEvent(event)
 
 # DIÁLOGO DE SETUP
