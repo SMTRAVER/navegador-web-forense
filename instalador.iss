@@ -83,6 +83,10 @@ Name: "desktopicon"; Description: "Crear un acceso directo en el escritorio"; \
 ; Toda la carpeta generada por PyInstaller (modo onedir)
 Source: "dist\TraversoWebForensics\*"; DestDir: "{app}"; \
     Flags: ignoreversion recursesubdirs createallsubdirs
+; La licencia va adentro de la instalacion: la GPL-3.0 exige entregar su texto
+; junto con el programa, y el programa usa PyQt6, que Riverbank publica bajo
+; esa licencia.
+Source: "LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#MiNombre}"; Filename: "{app}\{#MiEjecutable}"

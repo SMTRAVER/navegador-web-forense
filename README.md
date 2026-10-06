@@ -87,3 +87,19 @@ la grabación de la sesión.
 El contenido igual no se pierde. Se adquiere como archivo original con su hash y se mira
 en el visor del programa, que usa los códecs de Windows. El dictamen lo declara y
 transcribe qué formatos informó el motor ese día.
+
+## Licencia
+
+GPL-3.0. El texto completo está en [LICENSE.txt](LICENSE.txt).
+
+No es una preferencia: el programa usa PyQt6 y PyQt6-WebEngine, que Riverbank publica
+bajo GPL-3.0 únicamente. Lo que se construye con ellos y se distribuye va bajo esa misma
+licencia.
+
+En la práctica significa que cualquiera puede usar el programa, estudiarlo, modificarlo y
+redistribuirlo, y que todo derivado tiene que seguir abierto bajo GPL-3.0. Quien reciba el
+ejecutable tiene derecho a pedir el código con el que se compiló: es este repositorio, y
+la etiqueta de cada versión indica a qué estado del código corresponde cada instalador.
+
+FFmpeg no se distribuye con el programa. Se invoca como proceso aparte y lo instala quien
+usa la herramienta.
