@@ -1,4 +1,4 @@
-# Navegador Web Forense
+# Navegador Web Forense V1.0
 
 Navegador para adquirir prueba de sitios web y redes sociales dejando cadena de custodia.
 Cada archivo sale con su hash, su acta y su sello de tiempo. Al cerrar la sesión el
