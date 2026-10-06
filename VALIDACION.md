@@ -1,6 +1,6 @@
 # Validacion de la herramienta
 
-**Traverso Forensics · Navegador Web Forense v1.0** | commit `08cbf07` | 05/10/2026 11:07
+**Traverso Forensics · Navegador Web Forense v1.0** | commit `543ecd7` | 05/10/2026 11:07
 
 Este informe se genera ejecutando las pruebas, no escribiendolo: cada afirmacion queda con el resultado que dio en esta corrida. Para rehacerlo:
 
