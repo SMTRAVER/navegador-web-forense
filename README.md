@@ -31,8 +31,7 @@ Cada archivo adquirido lleva al lado su `.sha256` y su `.custodia.txt`.
 
 El sello de tiempo es RFC 3161, y antes de darlo por bueno el programa verifica la firma
 contra cuatro raíces que trae fijadas. Si una autoridad contesta algo que no verifica, se
-rechaza y queda asentado. Cuatro de las cinco autoridades responden por http, así que esa
-respuesta pudo haberla fabricado cualquiera en el camino.
+rechaza y queda asentado. 
 
 El log de auditoría encadena cada entrada con la anterior usando SHA-256. La cadena se
 firma con una clave Ed25519 que se genera al abrir el caso, vive en memoria y no se
@@ -45,8 +44,7 @@ versión se ve enseguida si alguien reemplazó un componente, que es lo que el h
 .exe solo no mostraba.
 
 El reloj del equipo se contrasta con la hora firmada por la autoridad de sellado, además
-del NTP de siempre. La consulta NTP viaja sin autenticar y cualquiera en la red puede
-contestarla; la hora del sello está firmada.
+del NTP de siempre. 
 
 El paquete final es un ZIP con todo adentro. Su hash va afuera, en el sidecar, el acta y
 un sello RFC 3161 propio, acompañado por la cadena de certificados de la autoridad.
@@ -77,44 +75,6 @@ El sello del paquete:
 ```bash
 openssl ts -verify -data <caso>.zip -in <caso>.zip.tsr -CAfile <caso>.zip.tsa.pem
 ```
-
-## Compilar
-
-```bat
-compilar_onedir.bat
-```
-
-Hace tres cosas: revisa que no haya nombres sin definir (si encuentra alguno no compila),
-arma el ejecutable con PyInstaller desde `.venv-forense` y escribe el manifiesto oficial
-de archivos de la versión. El instalador va aparte:
-
-```bat
-"C:\Program Files\Inno Setup 7\ISCC.exe" instalador.iss
-```
-
-El entorno está fijado en `requirements-build.txt`, separado del Python del sistema a
-propósito: con otros bindings de Qt instalados PyInstaller aborta.
-
-## Pruebas
-
-Están en `desarrollo/`. Cada una ejecuta el código del programa y no una copia de su
-lógica, y acepta la ruta de un `.py` para correrla contra un respaldo viejo y comprobar
-que ahí falla.
-
-```bat
-.venv-forense\Scripts\python.exe -u desarrollo\test_sello_verificado.py
-```
-
-El informe de validación se arma corriéndolas a todas y queda en
-[VALIDACION.md](VALIDACION.md): cada requisito con la prueba que lo verifica, el
-resultado de esa corrida y lo que la herramienta no cumple.
-
-```bat
-.venv-forense\Scripts\python.exe -u desarrollo\validacion_cftt.py
-```
-
-Las que abren el motor (listas, comentarios, rueda, descargas) se corren de a una. Dos
-procesos de QtWebEngine al mismo tiempo se tiran abajo y parece un fallo del programa.
 
 ## Lo que no hace
 
